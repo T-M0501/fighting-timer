@@ -126,7 +126,7 @@ export function sanitizeHistory(raw) {
 }
 
 export function defaultSettings() {
-  return { beepOn: true, voiceOn: true, volume: 80, countdown: 3, notify: false, keepAwake: true, menuView: 'simple', theme: 'kickboxing', voiceGender: 'female' };
+  return { beepOn: true, voiceOn: true, volume: 80, countdown: 3, notify: false, keepAwake: true, menuView: 'simple', theme: 'kickboxing', voiceGender: 'female', voiceProgress: true, historyStats: true };
 }
 
 export function sanitizeSettings(raw) {
@@ -143,6 +143,8 @@ export function sanitizeSettings(raw) {
     menuView: raw.menuView === 'detail' ? 'detail' : 'simple',
     theme: THEMES.some((t) => t.id === raw.theme) ? raw.theme : d.theme,
     voiceGender: raw.voiceGender === 'male' ? 'male' : 'female',
+    voiceProgress: typeof raw.voiceProgress === 'boolean' ? raw.voiceProgress : d.voiceProgress,
+    historyStats: typeof raw.historyStats === 'boolean' ? raw.historyStats : d.historyStats,
   };
 }
 
@@ -208,6 +210,77 @@ export function validateBackup(input) {
     data: { menus, exercises, history, settings },
     summary: { menus: menus.length, exercises: exercises.length, history: history.length, skipped },
   };
+}
+
+// ---- メニューの共有（1つのメニューを短い文字列にして、URLやQRコードで渡す） ----
+
+const b64url = {
+  enc(text) {
+    const bytes = new TextEncoder().encode(text);
+    let bin = '';
+    for (const b of bytes) bin += String.fromCharCode(b);
+    return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  },
+  dec(code) {
+    const bin = atob(code.replace(/-/g, '+').replace(/_/g, '/'));
+    return new TextDecoder('utf-8', { fatal: true }).decode(Uint8Array.from(bin, (c) => c.charCodeAt(0)));
+  },
+};
+
+/** メニュー → 共有コード（英数字と - _ のみ） */
+export function encodeMenuShare(menu) {
+  const m = sanitizeMenu(menu);
+  return b64url.enc(JSON.stringify({
+    v: 1, n: m.name, t: m.timeMode === 'individual' ? 1 : 0, w: m.commonWorkSec, r: m.repeatMode === 'circuit' ? 1 : 0,
+    p: m.prepSec, s: m.setRestSec, e: m.exerciseRestSec, c: m.circuitRestSec, l: m.laps,
+    i: m.items.map((it) => [it.name, it.workSec, it.sets, it.cycles, it.setRestSec, it.cycleRestSec, it.restAfterSec]),
+  }));
+}
+
+/** 共有コード → 新しいメニュー(新しいID・お気に入りなし)。読み取れなければ null */
+export function decodeMenuShare(code) {
+  try {
+    const o = JSON.parse(b64url.dec(String(code)));
+    if (!o || typeof o !== 'object' || o.v !== 1 || !Array.isArray(o.i)) return null;
+    const menu = sanitizeMenu({
+      name: o.n, timeMode: o.t ? 'individual' : 'common', commonWorkSec: o.w, repeatMode: o.r ? 'circuit' : 'exercise',
+      prepSec: o.p, setRestSec: o.s, exerciseRestSec: o.e, circuitRestSec: o.c, laps: o.l,
+      items: o.i.filter(Array.isArray).map((a) => ({ name: a[0], workSec: a[1], sets: a[2], cycles: a[3], setRestSec: a[4], cycleRestSec: a[5], restAfterSec: a[6] })),
+    });
+    return menu && menu.items.length ? menu : null;
+  } catch {
+    return null;
+  }
+}
+
+/** 貼り付けられた文字列(URLまたはコード)から共有コードを取り出す。なければ null */
+export function extractShareCode(text) {
+  const s = String(text ?? '').trim();
+  const m = s.match(/#\/import\/([A-Za-z0-9_-]+)/);
+  if (m) return m[1];
+  return /^[A-Za-z0-9_-]{20,}$/.test(s) ? s : null;
+}
+
+// ---- 履歴の集計（週は月曜始まり・端末の現地時間） ----
+export function historyStats(history, now = new Date()) {
+  const day0 = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const week0 = new Date(day0);
+  week0.setDate(day0.getDate() - ((day0.getDay() + 6) % 7));
+  const lastWeek0 = new Date(week0);
+  lastWeek0.setDate(week0.getDate() - 7);
+  const month0 = new Date(now.getFullYear(), now.getMonth(), 1);
+  const z = () => ({ count: 0, sec: 0 });
+  const out = { thisWeek: z(), lastWeek: z(), thisMonth: z(), total: z() };
+  const add = (k, r) => { out[k].count++; out[k].sec += r.durationSec; };
+  for (const r of history) {
+    const t = Date.parse(r.at);
+    if (!Number.isFinite(t)) continue;
+    add('total', r);
+    if (t >= week0.getTime()) add('thisWeek', r);
+    else if (t >= lastWeek0.getTime()) add('lastWeek', r);
+    if (t >= month0.getTime()) add('thisMonth', r);
+  }
+  return out;
 }
 
 // ---- 表示用の書式 ----

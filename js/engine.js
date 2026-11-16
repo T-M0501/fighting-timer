@@ -78,6 +78,20 @@ export function crossedCountdown(prevSec, curSec, n) {
 }
 
 /**
+ * 残り時間の読み上げを判定（運動中のみ）。
+ * 'half' = 残り半分(運動が60秒以上) / 'ten' = 残り10秒(運動が30秒以上) / null = 読まない
+ */
+export function progressCue(seg, prevSec, curSec) {
+  if (!seg || seg.kind !== 'work' || prevSec == null) return null;
+  const diff = prevSec - curSec;
+  if (diff < 1 || diff > 2) return null; // 復帰直後などの大きな飛びでは読まない
+  const crossed = (t) => prevSec > t && curSec <= t;
+  if (seg.dur >= 30 && crossed(10)) return 'ten';
+  if (seg.dur >= 60 && crossed(Math.floor(seg.dur / 2))) return 'half';
+  return null;
+}
+
+/**
  * タイマー本体。時刻(now:ミリ秒)を外から渡す方式で、setIntervalの回数には依存しない。
  * status: idle | running | paused | resuming | finished
  */

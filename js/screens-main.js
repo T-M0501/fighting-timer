@@ -1,8 +1,42 @@
 // ホーム・メニュー一覧・履歴・種目管理
-import { h, clear, mount, confirmDialog, toast, makeSortable, moveItem, segmented } from './dom.js';
-import { app, saveSettings, toggleFavorite, deleteMenu, reorderMenus, deleteHistory, clearHistory, historyNewestFirst, addExercise, removeExercise } from './core.js';
+import { h, clear, mount, confirmDialog, openModal, toast, makeSortable, moveItem, segmented } from './dom.js';
+import { app, saveSettings, saveMenu, toggleFavorite, deleteMenu, reorderMenus, deleteHistory, clearHistory, historyNewestFirst, addExercise, removeExercise } from './core.js';
 import { themeIcon } from './glove.js';
-import { pageHeader, menuSummary, menuDetail, fmtDateTime } from './ui.js';
+import { pageHeader, menuSummary, menuDetail, fmtDateTime, copyText } from './ui.js';
+import { encodeMenuShare, decodeMenuShare, historyStats } from './model.js';
+import { qrMatrix } from './qr.js';
+
+/** 文字列をQRコードの画像(canvas)にする。長すぎて作れないときは null */
+function qrCanvas(text) {
+  const m = qrMatrix(new TextEncoder().encode(text), 22);
+  if (!m) return null;
+  const quiet = 4;
+  const sc = 4;
+  const n = m.length + quiet * 2;
+  const c = h('canvas', { class: 'qr', width: n * sc, height: n * sc, role: 'img', 'aria-label': '共有用のQRコード' });
+  const g = c.getContext('2d');
+  g.fillStyle = '#fff';
+  g.fillRect(0, 0, c.width, c.height);
+  g.fillStyle = '#000';
+  m.forEach((row, y) => row.forEach((dark, x) => { if (dark) g.fillRect((x + quiet) * sc, (y + quiet) * sc, sc, sc); }));
+  return c;
+}
+
+/** メニュー1件を共有する画面（QRコードとURL） */
+function openShare(menu) {
+  const url = new URL('./', location.href).href + '#/import/' + encodeMenuShare(menu);
+  const qr = qrCanvas(url);
+  const m = openModal(h('div', null,
+    h('h2', { class: 'modal-title' }, 'メニューを共有'),
+    h('p', { class: 'meta' }, `「${menu.name}」を相手に渡します。相手がQRコードを読み取るか、URLを開くと、同じメニューを追加できます。`),
+    qr ? h('div', { class: 'qr-wrap' }, qr) : h('p', { class: 'meta' }, 'このメニューは内容が多いためQRコードを作れません。下のURLで共有してください。'),
+    h('input', { type: 'text', class: 'text url-box', readonly: true, value: url, 'aria-label': '共有用URL', onFocus: (e) => e.target.select() }),
+    h('div', { class: 'modal-actions col' },
+      h('button', { class: 'btn btn-primary', onClick: () => copyText(url, 'URLをコピーしました') }, 'URLをコピー'),
+      navigator.share ? h('button', { class: 'btn', onClick: () => navigator.share({ title: `Fighting Timer メニュー「${menu.name}」`, url }).catch(() => {}) }, 'LINEやメールで送る') : null,
+      h('button', { class: 'btn', onClick: () => m.close() }, '閉じる')),
+    h('p', { class: 'meta' }, '履歴やほかのメニューは送られません。ホーム画面に追加したアプリで受け取るときは、設定の「共有されたメニューを追加」にURLを貼り付けてください。')));
+}
 
 function detailBlock(m) {
   const d = menuDetail(m);
@@ -74,18 +108,28 @@ export function renderMenus(root) {
         app.state.settings.menuView === 'detail' ? detailBlock(m) : null,
         h('div', { class: 'row-actions' },
           h('button', { class: 'btn btn-primary', disabled: m.items.length === 0, onClick: () => app.go(`#/run/${m.id}`) }, '開始'),
-          h('button', { class: 'btn', onClick: () => app.go(`#/menu/${m.id}/edit`) }, '編集'),
+          h('button', { class: 'btn', 'aria-label': `${m.name}の編集・共有・削除`, onClick: () => openActions(m) }, '編集など ⋯'),
           h('button', { class: 'btn btn-icon', 'aria-label': '上へ', disabled: i === 0, onClick: () => move(i, i - 1) }, '↑'),
-          h('button', { class: 'btn btn-icon', 'aria-label': '下へ', disabled: i === menus.length - 1, onClick: () => move(i, i + 1) }, '↓'),
-          h('button', {
-            class: 'btn btn-danger-ghost',
-            onClick: async () => {
-              const ok = await confirmDialog({ title: 'メニューを削除しますか？', message: `「${m.name}」を削除します。過去の履歴は残ります。`, okText: '削除する', danger: true });
-              if (ok) { await deleteMenu(m.id); toast('削除しました'); draw(); }
-            },
-          }, '削除'))));
+          h('button', { class: 'btn btn-icon', 'aria-label': '下へ', disabled: i === menus.length - 1, onClick: () => move(i, i + 1) }, '↓'))));
     });
   };
+  // 編集・共有・削除は1つのボタンにまとめる（ボタンが増えすぎないように）
+  function openActions(m) {
+    const dlg = openModal(h('div', null,
+      h('h2', { class: 'modal-title' }, m.name),
+      h('div', { class: 'modal-actions col' },
+        h('button', { class: 'btn btn-primary btn-lg', onClick: () => { dlg.close(); app.go(`#/menu/${m.id}/edit`); } }, '編集する'),
+        h('button', { class: 'btn btn-lg', disabled: m.items.length === 0, onClick: () => { dlg.close(); openShare(m); } }, '共有する（QRコード・URL）'),
+        h('button', {
+          class: 'btn btn-lg btn-danger-ghost',
+          onClick: async () => {
+            dlg.close();
+            const ok = await confirmDialog({ title: 'メニューを削除しますか？', message: `「${m.name}」を削除します。過去の履歴は残ります。`, okText: '削除する', danger: true });
+            if (ok) { await deleteMenu(m.id); toast('削除しました'); draw(); }
+          },
+        }, '削除する'),
+        h('button', { class: 'btn btn-lg', onClick: () => dlg.close() }, '閉じる'))));
+  }
   const move = async (from, to) => {
     const ids = moveItem(app.state.menus.map((m) => m.id), from, to);
     await reorderMenus(ids);
@@ -109,8 +153,45 @@ export function renderMenus(root) {
     listEl);
 }
 
+/** 共有されたメニューの受け取り画面（#/import/コード） */
+export function renderImport(root, code) {
+  const menu = decodeMenuShare(code || '');
+  if (!menu) {
+    mount(root, pageHeader('メニューの追加', '#/menus'),
+      h('p', { class: 'pad' }, '共有されたメニューを読み取れませんでした。URLが途中で切れていないか確認して、もう一度お試しください。'));
+    return;
+  }
+  const add = async () => {
+    const same = app.state.menus.some((m) => m.name === menu.name);
+    if (same) menu.name = `${menu.name}（共有）`.slice(0, 40);
+    await saveMenu(menu);
+    toast('メニューを追加しました');
+    app.go('#/menus');
+  };
+  mount(root, pageHeader('メニューの追加', '#/menus'),
+    h('section', { class: 'card' },
+      h('p', { class: 'meta' }, '共有されたメニューです。追加すると、メニュー一覧のいちばん下に入ります。'),
+      h('div', { class: 'menu-name' }, menu.name),
+      h('div', { class: 'meta' }, menuSummary(menu)),
+      detailBlock(menu),
+      h('div', { class: 'modal-actions col' },
+        h('button', { class: 'btn btn-primary btn-lg', onClick: add }, 'このメニューを追加'),
+        h('button', { class: 'btn btn-lg', onClick: () => app.go('#/menus') }, '追加しない'))));
+}
+
+function statsCard() {
+  const s = historyStats(app.state.history);
+  const cell = (label, v) => h('div', { class: 'stat' },
+    h('div', { class: 'stat-label' }, label),
+    h('div', { class: 'stat-count' }, `${v.count}回`),
+    h('div', { class: 'stat-time' }, formatDuration(v.sec)));
+  return h('section', { class: 'card stats', 'aria-label': '履歴の集計' },
+    cell('今週', s.thisWeek), cell('先週', s.lastWeek), cell('今月', s.thisMonth), cell('累計', s.total));
+}
+
 export function renderHistory(root) {
   const listEl = h('ul', { class: 'list' });
+  const statsEl = h('div');
   const clearBtn = h('button', {
     class: 'btn btn-danger-ghost',
     onClick: async () => {
@@ -120,7 +201,9 @@ export function renderHistory(root) {
   }, 'すべて削除');
   const draw = () => {
     clear(listEl);
+    clear(statsEl);
     const list = historyNewestFirst();
+    if (app.state.settings.historyStats && list.length) statsEl.append(statsCard());
     clearBtn.disabled = list.length === 0;
     if (!list.length) { listEl.append(h('li', { class: 'meta pad' }, '履歴はまだありません。トレーニング終了時に「履歴を保存」を選ぶとここに残ります。')); return; }
     for (const r of list) {
@@ -134,7 +217,7 @@ export function renderHistory(root) {
     }
   };
   draw();
-  mount(root, pageHeader('履歴', '#/', clearBtn), listEl);
+  mount(root, pageHeader('履歴', '#/', clearBtn), statsEl, listEl);
 }
 
 export function renderExercises(root) {

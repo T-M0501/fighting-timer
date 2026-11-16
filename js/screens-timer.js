@@ -1,7 +1,7 @@
 // タイマー画面。進行は TimerEngine、ここは表示・音・操作だけを担当する。
 import { h, mount, confirmDialog, openModal, toast } from './dom.js';
 import { app, addHistory } from './core.js';
-import { buildPlan, nextInfo, TimerEngine, crossedCountdown } from './engine.js';
+import { buildPlan, nextInfo, TimerEngine, crossedCountdown, progressCue } from './engine.js';
 import { formatClock, formatDuration } from './model.js';
 import { pageHeader } from './ui.js';
 
@@ -259,6 +259,8 @@ export function renderTimer(root, id) {
       } else {
         const c = crossedCountdown(lastRemSec, v.remainingSec, app.state.settings.countdown);
         if (c != null) app.audio.beep('count');
+        const cue = app.state.settings.voiceProgress ? progressCue(seg, lastRemSec, v.remainingSec) : null;
+        if (cue) app.audio.speak(cue === 'half' ? '残り半分' : '残り10秒');
         lastRemSec = v.remainingSec;
       }
     } else if (v.status === 'resuming' || v.status === 'paused') {

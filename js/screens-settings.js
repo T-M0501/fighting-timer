@@ -1,9 +1,9 @@
 // 設定画面（音・試聴・バックアップ・復元・更新確認）
-import { h, mount, confirmDialog, alertDialog, toast, segmented } from './dom.js';
+import { h, mount, confirmDialog, alertDialog, openModal, toast, segmented } from './dom.js';
 import { app, saveSettings, applyRestore, hasPendingUpdate, tryApplyUpdate } from './core.js';
-import { buildBackup, validateBackup, COUNTDOWN_CHOICES, THEMES } from './model.js';
+import { buildBackup, validateBackup, extractShareCode, COUNTDOWN_CHOICES, THEMES } from './model.js';
 import { themeIcon } from './glove.js';
-import { pageHeader } from './ui.js';
+import { pageHeader, copyText } from './ui.js';
 import { APP_VERSION } from './version.js';
 
 function toggleRow(label, desc, checked, onChange) {
@@ -18,24 +18,26 @@ function shareUrl() {
   return new URL('./', location.href).href;
 }
 
-async function copyUrl() {
-  const url = shareUrl();
-  try {
-    await navigator.clipboard.writeText(url);
-    toast('URLをコピーしました');
-    return;
-  } catch { /* 下の方法に切り替える */ }
-  try {
-    const ta = h('textarea', { style: { position: 'fixed', opacity: '0' } });
-    ta.value = url;
-    document.body.append(ta);
-    ta.select();
-    const ok = document.execCommand('copy');
-    ta.remove();
-    toast(ok ? 'URLをコピーしました' : 'コピーできませんでした。URLを長押ししてコピーしてください');
-  } catch {
-    toast('コピーできませんでした。URLを長押ししてコピーしてください');
-  }
+const copyUrl = () => copyText(shareUrl(), 'URLをコピーしました');
+
+/** 共有されたメニューのURLを貼り付けて追加する（ホーム画面に追加したアプリではURLを直接開けないため） */
+function openImportDialog() {
+  const ta = h('textarea', { class: 'text', rows: 4, placeholder: 'ここに共有されたURLを貼り付け', 'aria-label': '共有されたURL' });
+  const m = openModal(h('div', null,
+    h('h2', { class: 'modal-title' }, '共有されたメニューを追加'),
+    h('p', { class: 'meta' }, '受け取ったURLをコピーして、下に貼り付けてください。'),
+    ta,
+    h('div', { class: 'modal-actions' },
+      h('button', { class: 'btn', onClick: () => m.close() }, '閉じる'),
+      h('button', {
+        class: 'btn btn-primary',
+        onClick: () => {
+          const code = extractShareCode(ta.value);
+          if (!code) { toast('共有用のURLが見つかりません'); return; }
+          m.close();
+          app.go('#/import/' + code);
+        },
+      }, '読み込む'))));
 }
 
 function backupFileName() {
@@ -168,6 +170,7 @@ export function renderSettings(root) {
       h('h2', { class: 'sec in' }, '音'),
       toggleRow('電子音', '運動・休憩の切り替え音、カウントダウン音、終了メロディー', st.beepOn, async (v) => { await saveSettings({ beepOn: v }); updateCdHint(); }),
       toggleRow('音声ガイド（日本語）', '運動開始・休憩開始・次の種目名・終了', st.voiceOn, (v) => saveSettings({ voiceOn: v })),
+      toggleRow('残り時間の読み上げ', '運動が1分以上のとき「残り半分」、30秒以上のとき「残り10秒」と読み上げます（音声ガイドがオンのとき）', st.voiceProgress, (v) => saveSettings({ voiceProgress: v })),
       h('div', { class: 'fld-label' }, '音声ガイドの声'),
       voiceSeg,
       voiceHint,
@@ -186,7 +189,8 @@ export function renderSettings(root) {
     h('section', { class: 'card' },
       h('h2', { class: 'sec in' }, '画面'),
       toggleRow('トレーニング中は画面をスリープさせない', 'タイマーが動いている間（一時停止中も含む）だけ、画面をつけたままにします。電池の減りは早くなります', st.keepAwake, (v) => saveSettings({ keepAwake: v })),
-      'wakeLock' in navigator ? null : h('p', { class: 'meta' }, 'この端末（またはブラウザ）は対応していないため、この設定は使えません。')),
+      'wakeLock' in navigator ? null : h('p', { class: 'meta' }, 'この端末（またはブラウザ）は対応していないため、この設定は使えません。'),
+      toggleRow('履歴に集計を表示', '履歴画面の上に、今週・先週・今月・累計の回数と合計時間を表示します', st.historyStats, (v) => saveSettings({ historyStats: v }))),
     h('section', { class: 'card' },
       h('h2', { class: 'sec in' }, '通知（お試し機能）'),
       toggleRow('運動・休憩の切り替わりを通知', '画面を閉じている間は、端末の制限で通知が届かないことがあります', st.notify, async (v) => {
@@ -199,6 +203,7 @@ export function renderSettings(root) {
     h('section', { class: 'card' },
       h('h2', { class: 'sec in' }, 'データ'),
       h('button', { class: 'btn btn-block', onClick: () => app.go('#/exercises') }, '登録種目の管理'),
+      h('button', { class: 'btn btn-block', onClick: openImportDialog }, '共有されたメニューを追加'),
       h('button', { class: 'btn btn-block btn-primary', onClick: exportBackup }, 'バックアップを保存'),
       h('button', { class: 'btn btn-block', onClick: () => fileInput.click() }, 'バックアップから復元'),
       fileInput,

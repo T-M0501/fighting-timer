@@ -1,5 +1,26 @@
 // 画面共通の部品
-import { h } from './dom.js';
+import { h, toast } from './dom.js';
+
+/** 文字列をクリップボードにコピーして結果を知らせる */
+export async function copyText(text, okMsg = 'コピーしました') {
+  const ng = 'コピーできませんでした。文字を長押ししてコピーしてください';
+  try {
+    await navigator.clipboard.writeText(text);
+    toast(okMsg);
+    return;
+  } catch { /* 下の方法に切り替える */ }
+  try {
+    const ta = h('textarea', { style: { position: 'fixed', opacity: '0' } });
+    ta.value = text;
+    document.body.append(ta);
+    ta.select();
+    const ok = document.execCommand('copy');
+    ta.remove();
+    toast(ok ? okMsg : ng);
+  } catch {
+    toast(ng);
+  }
+}
 import { app } from './core.js';
 import { buildPlan } from './engine.js';
 import { formatDuration } from './model.js';

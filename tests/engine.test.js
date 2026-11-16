@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildPlan, TimerEngine, nextInfo, crossedCountdown } from '../js/engine.js';
+import { buildPlan, TimerEngine, nextInfo, crossedCountdown, progressCue } from '../js/engine.js';
 import { defaultMenu, sanitizeMenu } from '../js/model.js';
 
 function menu(over = {}, items) {
@@ -234,4 +234,17 @@ test('個別休憩の補正（範囲外・空）', () => {
   assert.equal(m.items[0].restAfterSec, 0);
   const d = sanitizeMenu({ name: 'x', items: [{ name: 'A' }] });
   assert.deepEqual([d.items[0].cycles, d.items[0].setRestSec, d.items[0].restAfterSec], [1, null, null]);
+});
+
+test('残り時間の読み上げ: 残り半分は60秒以上、残り10秒は30秒以上の運動だけ', () => {
+  const w = (dur) => ({ kind: 'work', dur });
+  assert.equal(progressCue(w(60), 31, 30), 'half');
+  assert.equal(progressCue(w(60), 30, 29), null);
+  assert.equal(progressCue(w(60), 11, 10), 'ten');
+  assert.equal(progressCue(w(45), 23, 22), null); // 60秒未満は半分を読まない
+  assert.equal(progressCue(w(30), 11, 10), 'ten');
+  assert.equal(progressCue(w(20), 11, 10), null);
+  assert.equal(progressCue({ kind: 'rest', dur: 90 }, 46, 45), null); // 休憩中は読まない
+  assert.equal(progressCue(w(120), 90, 50), null); // 大きな飛びでは読まない
+  assert.equal(progressCue(w(120), null, 60), null);
 });

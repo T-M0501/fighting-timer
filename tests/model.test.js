@@ -2,14 +2,14 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   validateBackup, buildBackup, defaultMenu, sanitizeSettings, formatDuration, formatClock,
-  DEFAULT_EXERCISE_NAMES, BACKUP_VERSION,
+  DEFAULT_EXERCISE_NAMES, BACKUP_VERSION, encodeMenuShare, decodeMenuShare, extractShareCode, historyStats,
 } from '../js/model.js';
 
 const sampleState = () => ({
   menus: [{ ...defaultMenu(1), name: 'メニューA', items: [{ id: 'i1', name: 'スクワット', workSec: 30, sets: 3, cycles: 2, setRestSec: 10, cycleRestSec: null, restAfterSec: 120 }] }],
   exercises: [{ id: 'e1', name: 'スクワット' }],
   history: [{ id: 'h1', at: '2026-11-16T05:00:00.000Z', menuName: 'メニューA', durationSec: 300 }],
-  settings: { beepOn: false, voiceOn: true, volume: 50, countdown: 5, notify: false, keepAwake: false, menuView: 'detail', theme: 'judo', voiceGender: 'male' },
+  settings: { beepOn: false, voiceOn: true, volume: 50, countdown: 5, notify: false, keepAwake: false, menuView: 'detail', theme: 'judo', voiceGender: 'male', voiceProgress: false, historyStats: false },
 });
 
 test('バックアップ: 書き出し→検証で内容が一致する', () => {
@@ -62,7 +62,7 @@ test('バックアップ: ID重複は除去', () => {
 });
 
 test('設定の補正', () => {
-  assert.deepEqual(sanitizeSettings(null), { beepOn: true, voiceOn: true, volume: 80, countdown: 3, notify: false, keepAwake: true, menuView: 'simple', theme: 'kickboxing', voiceGender: 'female' });
+  assert.deepEqual(sanitizeSettings(null), { beepOn: true, voiceOn: true, volume: 80, countdown: 3, notify: false, keepAwake: true, menuView: 'simple', theme: 'kickboxing', voiceGender: 'female', voiceProgress: true, historyStats: true });
   assert.equal(sanitizeSettings({ voiceGender: 'male' }).voiceGender, 'male');
   assert.equal(sanitizeSettings({ voiceGender: 'x' }).voiceGender, 'female');
   assert.equal(sanitizeSettings({ theme: 'karate' }).theme, 'karate');
@@ -89,4 +89,43 @@ test('時間の書式', () => {
   assert.equal(formatClock(1800), '30:00');
   assert.equal(formatClock(5), '00:05');
   assert.equal(formatClock(3725), '1:02:05');
+});
+
+test('メニュー共有: コード化→復元で内容が一致し、IDは新しくなる', () => {
+  const src = sampleState().menus[0];
+  const code = encodeMenuShare(src);
+  assert.match(code, /^[A-Za-z0-9_-]+$/);
+  const got = decodeMenuShare(code);
+  assert.notEqual(got.id, src.id);
+  assert.equal(got.favorite, false);
+  const strip = (m) => ({ ...m, id: 0, favorite: false, order: 0, items: m.items.map((it) => ({ ...it, id: 0 })) });
+  assert.deepEqual(strip(got), strip(src));
+});
+
+test('メニュー共有: 壊れたコードは null、URLからコードを取り出せる', () => {
+  assert.equal(decodeMenuShare('@@@'), null);
+  assert.equal(decodeMenuShare('abcd'), null);
+  assert.equal(decodeMenuShare(encodeMenuShare({ ...defaultMenu(), name: '空' })), null); // 種目なし
+  const code = encodeMenuShare(sampleState().menus[0]);
+  assert.equal(extractShareCode('見てね https://example.com/app/#/import/' + code + ' よろしく'), code);
+  assert.equal(extractShareCode(' ' + code + ' '), code);
+  assert.equal(extractShareCode('こんにちは'), null);
+});
+
+test('履歴の集計: 今週(月曜始まり)・先週・今月・累計', () => {
+  const now = new Date(2026, 10, 18, 12, 0); // 2026/11/18(水)
+  const at = (y, m, d) => new Date(y, m, d, 9, 0).toISOString();
+  const h = [
+    { at: at(2026, 10, 16), durationSec: 100 }, // 月(今週)
+    { at: at(2026, 10, 18), durationSec: 200 }, // 水(今週)
+    { at: at(2026, 10, 15), durationSec: 50 }, // 日(先週)
+    { at: at(2026, 10, 9), durationSec: 30 }, // 先週月曜
+    { at: at(2026, 10, 8), durationSec: 7 }, // 先々週(今月)
+    { at: at(2026, 9, 31), durationSec: 1000 }, // 先月
+  ];
+  const s = historyStats(h, now);
+  assert.deepEqual(s.thisWeek, { count: 2, sec: 300 });
+  assert.deepEqual(s.lastWeek, { count: 2, sec: 80 });
+  assert.deepEqual(s.thisMonth, { count: 5, sec: 387 });
+  assert.deepEqual(s.total, { count: 6, sec: 1387 });
 });

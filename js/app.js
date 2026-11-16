@@ -1,7 +1,7 @@
 // 起動処理とルーター
 import { app, initData, setupServiceWorker, tryApplyUpdate } from './core.js';
 import { h, clear, mount } from './dom.js';
-import { renderHome, renderMenus, renderHistory, renderExercises } from './screens-main.js';
+import { renderHome, renderMenus, renderHistory, renderExercises, renderImport } from './screens-main.js';
 import { renderEditor } from './screens-edit.js';
 import { renderTimer } from './screens-timer.js';
 import { renderSettings } from './screens-settings.js';
@@ -30,6 +30,7 @@ function render(hash) {
     else if (a === 'menus') renderMenus(view);
     else if (a === 'menu' && b && c === 'edit') renderEditor(view, b);
     else if (a === 'run' && b) renderTimer(view, b);
+    else if (a === 'import') renderImport(view, b);
     else if (a === 'history') renderHistory(view);
     else if (a === 'settings') renderSettings(view);
     else if (a === 'exercises') renderExercises(view);
