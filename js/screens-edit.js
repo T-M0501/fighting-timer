@@ -2,7 +2,7 @@
 import { h, clear, mount, confirmDialog, openModal, toast, timeField, numberField, segmented, makeSortable, moveItem } from './dom.js';
 import { app, saveMenu, addExercise } from './core.js';
 import { buildPlan } from './engine.js';
-import { defaultMenu, newId, LIMITS, formatDuration } from './model.js';
+import { defaultMenu, newItem, LIMITS, formatDuration } from './model.js';
 import { pageHeader } from './ui.js';
 
 export function renderEditor(root, id) {
@@ -76,7 +76,11 @@ export function renderEditor(root, id) {
         timeField({ label: '準備時間（0秒で即開始）', value: draft.prepSec, min: 0, max: T, onChange: (v) => { draft.prepSec = v; updateTotal(); } }),
         circuit ? null : timeField({ label: 'セット間の休憩', value: draft.setRestSec, min: 0, max: T, onChange: (v) => { draft.setRestSec = v; updateTotal(); } }),
         timeField({ label: '種目間の休憩', value: draft.exerciseRestSec, min: 0, max: T, onChange: (v) => { draft.exerciseRestSec = v; updateTotal(); } }),
-        circuit ? timeField({ label: '周回間の休憩', value: draft.circuitRestSec, min: 0, max: T, onChange: (v) => { draft.circuitRestSec = v; updateTotal(); } }) : null),
+        timeField({
+          label: circuit ? '周回間の休憩' : 'サイクル間の休憩（同じ種目を繰り返すとき）', value: draft.circuitRestSec, min: 0, max: T,
+          onChange: (v) => { draft.circuitRestSec = v; updateTotal(); },
+        }),
+        circuit ? null : h('p', { class: 'meta' }, '各種目の「休憩の個別設定」で、種目ごとに別の休憩にもできます。')),
       h('section', null,
         h('h2', { class: 'sec' }, `種目（${draft.items.length}）`),
         itemsList(),
@@ -103,10 +107,44 @@ export function renderEditor(root, id) {
         circuit ? null : numberField({
           label: 'セット数', value: it.sets, min: 1, max: LIMITS.MAX_SETS, steps: [-1, 1], format: (v) => `${v}セット`,
           onChange: (v) => { it.sets = v; updateTotal(); },
-        })));
+        }),
+        circuit ? null : numberField({
+          label: 'サイクル数（セットをまとめて繰り返す回数）', value: it.cycles, min: 1, max: LIMITS.MAX_SETS, steps: [-1, 1], format: (v) => `${v}サイクル`,
+          onChange: (v) => { it.cycles = v; updateTotal(); },
+        }),
+        circuit ? null : restOverrides(it)));
     });
     makeSortable(ul, { onReorder: reorder });
     return ul;
+  }
+
+  /** 種目ごとの休憩の個別設定（チェックを外すとメニュー共通の値を使う） */
+  function restOverrides(it) {
+    const rows = [
+      ['setRestSec', 'この種目のセット間休憩', () => draft.setRestSec],
+      ['cycleRestSec', 'この種目のサイクル間休憩', () => draft.circuitRestSec],
+      ['restAfterSec', 'この種目が終わったあとの休憩（次の種目へ）', () => draft.exerciseRestSec],
+    ];
+    const used = rows.some(([k]) => it[k] !== null && it[k] !== undefined);
+    const det = h('details', { class: 'ovr-box', open: used }, h('summary', null, '休憩の個別設定'));
+    for (const [key, label, menuVal] of rows) {
+      const wrap = h('div', { class: 'ovr' });
+      const draw = () => {
+        clear(wrap);
+        const on = it[key] !== null && it[key] !== undefined;
+        mount(wrap,
+          h('label', { class: 'ovr-chk' },
+            h('input', {
+              type: 'checkbox', checked: on,
+              onChange: (e) => { it[key] = e.target.checked ? menuVal() : null; draw(); updateTotal(); },
+            }),
+            h('span', null, on ? label : `${label}：共通（${formatDuration(menuVal())}）`)),
+          on ? timeField({ label: '秒数', value: it[key], min: 0, max: T, onChange: (v) => { it[key] = v; updateTotal(); } }) : null);
+      };
+      draw();
+      det.append(wrap);
+    }
+    return det;
   }
 
   function reorder(from, to) {
@@ -115,7 +153,7 @@ export function renderEditor(root, id) {
   }
 
   function addItem(name) {
-    draft.items.push({ id: newId(), name, workSec: draft.commonWorkSec, sets: 3 });
+    draft.items.push(newItem(name, draft.commonWorkSec));
     build();
   }
 

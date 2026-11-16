@@ -59,6 +59,12 @@ export function defaultMenu(order = 0) {
   };
 }
 
+/** 空(null/未設定)は「メニュー共通の値を使う」。値があれば 0〜30分に補正 */
+function optionalSec(v) {
+  if (v === null || v === undefined || v === '') return null;
+  return clampInt(v, 0, LIMITS.MAX_TIME_SEC, null);
+}
+
 export function sanitizeItem(raw) {
   if (!raw || typeof raw !== 'object') return null;
   const name = cleanName(raw.name);
@@ -68,7 +74,15 @@ export function sanitizeItem(raw) {
     name,
     workSec: clampInt(raw.workSec, 1, LIMITS.MAX_TIME_SEC, 30),
     sets: clampInt(raw.sets, 1, LIMITS.MAX_SETS, 3),
+    cycles: clampInt(raw.cycles, 1, LIMITS.MAX_SETS, 1), // 同じ種目を繰り返す回数(種目ごとに全セットの方式のみ)
+    setRestSec: optionalSec(raw.setRestSec), // この種目のセット間休憩(空=メニュー共通)
+    cycleRestSec: optionalSec(raw.cycleRestSec), // この種目のサイクル間休憩(空=メニュー共通)
+    restAfterSec: optionalSec(raw.restAfterSec), // この種目の後の休憩(空=メニューの種目間休憩)
   };
+}
+
+export function newItem(name, workSec = 30) {
+  return { id: newId(), name, workSec, sets: 3, cycles: 1, setRestSec: null, cycleRestSec: null, restAfterSec: null };
 }
 
 export function sanitizeMenu(raw, fallbackOrder = 0) {

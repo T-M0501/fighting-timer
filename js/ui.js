@@ -36,9 +36,16 @@ export function menuDetail(menu) {
   }
   const items = menu.items.map((it, i) => {
     const parts = [];
+    const extra = [];
     if (menu.timeMode === 'individual') parts.push(d(it.workSec));
-    if (menu.repeatMode !== 'circuit') parts.push(`${it.sets}セット`);
-    return `${i + 1}. ${it.name}${parts.length ? '　' + parts.join(' × ') : ''}`;
+    if (menu.repeatMode !== 'circuit') {
+      parts.push(`${it.sets}セット`);
+      if (it.cycles > 1) parts.push(`${it.cycles}サイクル`);
+      if (it.setRestSec != null) extra.push(`セット間休憩${d(it.setRestSec)}`);
+      if (it.cycleRestSec != null && it.cycles > 1) extra.push(`サイクル間休憩${d(it.cycleRestSec)}`);
+      if (it.restAfterSec != null) extra.push(`終了後の休憩${d(it.restAfterSec)}`);
+    }
+    return `${i + 1}. ${it.name}${parts.length ? '　' + parts.join(' × ') : ''}${extra.length ? '（' + extra.join('、') + '）' : ''}`;
   });
   return { settings, items };
 }

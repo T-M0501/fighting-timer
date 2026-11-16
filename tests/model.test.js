@@ -6,7 +6,7 @@ import {
 } from '../js/model.js';
 
 const sampleState = () => ({
-  menus: [{ ...defaultMenu(1), name: 'メニューA', items: [{ id: 'i1', name: 'スクワット', workSec: 30, sets: 3 }] }],
+  menus: [{ ...defaultMenu(1), name: 'メニューA', items: [{ id: 'i1', name: 'スクワット', workSec: 30, sets: 3, cycles: 2, setRestSec: 10, cycleRestSec: null, restAfterSec: 120 }] }],
   exercises: [{ id: 'e1', name: 'スクワット' }],
   history: [{ id: 'h1', at: '2026-11-16T05:00:00.000Z', menuName: 'メニューA', durationSec: 300 }],
   settings: { beepOn: false, voiceOn: true, volume: 50, countdown: 5, notify: false, keepAwake: false, menuView: 'detail', theme: 'judo' },

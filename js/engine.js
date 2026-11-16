@@ -3,9 +3,13 @@
 
 /** 2つの運動ユニット間に入る休憩を決める（休憩の遷移ルールはここだけで一元管理） */
 export function restBetween(menu, a, b) {
+  // 種目ごとの個別休憩は「種目ごとに全セット」方式のときだけ使う（空ならメニュー共通の値）
+  const it = menu.repeatMode === 'circuit' ? null : (menu.items || [])[a.item];
+  const pick = (v, def) => (v === null || v === undefined ? def : v);
   if (a.lap !== b.lap) return { restKind: 'lap', dur: menu.circuitRestSec };
-  if (a.item !== b.item) return { restKind: 'exercise', dur: menu.exerciseRestSec };
-  return { restKind: 'set', dur: menu.setRestSec };
+  if (a.item !== b.item) return { restKind: 'exercise', dur: pick(it && it.restAfterSec, menu.exerciseRestSec) };
+  if (a.cycle !== b.cycle) return { restKind: 'cycle', dur: pick(it && it.cycleRestSec, menu.circuitRestSec) };
+  return { restKind: 'set', dur: pick(it && it.setRestSec, menu.setRestSec) };
 }
 
 /**
@@ -20,12 +24,15 @@ export function buildPlan(menu) {
   if (menu.repeatMode === 'circuit') {
     const laps = menu.laps;
     for (let l = 1; l <= laps; l++) {
-      for (let i = 0; i < items.length; i++) units.push({ item: i, set: 1, sets: 1, lap: l, laps });
+      for (let i = 0; i < items.length; i++) units.push({ item: i, set: 1, sets: 1, cycle: 1, cycles: 1, lap: l, laps });
     }
   } else {
     for (let i = 0; i < items.length; i++) {
       const sets = items[i].sets;
-      for (let s = 1; s <= sets; s++) units.push({ item: i, set: s, sets, lap: 1, laps: 1 });
+      const cycles = items[i].cycles || 1;
+      for (let c = 1; c <= cycles; c++) {
+        for (let s = 1; s <= sets; s++) units.push({ item: i, set: s, sets, cycle: c, cycles, lap: 1, laps: 1 });
+      }
     }
   }
 

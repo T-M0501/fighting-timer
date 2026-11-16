@@ -85,6 +85,11 @@ h1, h2, p { margin: 0; }
 .row-top { display: flex; align-items: center; gap: 8px; }
 .menu-main { flex: 1; min-width: 0; }
 .menu-name { font-weight: 700; overflow-wrap: anywhere; }
+.ovr-box { margin-top: 8px; border: 1px solid var(--line); border-radius: 12px; padding: 4px 10px; background: #fafafa; }
+.ovr-box summary { min-height: 44px; display: flex; align-items: center; font-weight: 700; cursor: pointer; }
+.ovr { margin-bottom: 6px; }
+.ovr-chk { display: flex; align-items: center; gap: 10px; min-height: 44px; font-size: 14px; }
+.ovr-chk input { width: 22px; height: 22px; accent-color: var(--primary); flex: none; }
 .view-toggle { margin-bottom: 12px; }
 .detail { margin-top: 8px; padding: 8px 10px; background: #f8f9fa; border-radius: 10px; font-size: 14px; }
 .detail-settings { color: var(--muted); margin-bottom: 4px; }

@@ -198,3 +198,40 @@ test('サニタイズ後のメニューでも計画が作れ、範囲外値は�
   assert.equal(m.items[0].workSec, 1);
   assert.ok(buildPlan(m).totalSec > 0);
 });
+
+test('種目ごとの休憩・サイクル: 4セット×2サイクル→2分休憩→次の種目', () => {
+  const m = menu({ prepSec: 10, commonWorkSec: 20, setRestSec: 15, exerciseRestSec: 30, circuitRestSec: 30 }, [
+    { id: 'a', name: 'A', workSec: 20, sets: 4, cycles: 2, setRestSec: 10, cycleRestSec: 45, restAfterSec: 120 },
+    { id: 'b', name: 'B', workSec: 20, sets: 2, cycles: 2 }, // 個別設定なし=メニュー共通
+  ]);
+  const p = buildPlan(m);
+  assert.equal(kinds(p),
+    'p10 w20 r10:s w20 r10:s w20 r10:s w20 r45:c w20 r10:s w20 r10:s w20 r10:s w20 r120:e ' +
+    'w20 r15:s w20 r30:c w20 r15:s w20');
+  assert.ok(p.segments.filter((s) => s.kind === 'work' && s.item === 0).every((s) => s.cycles === 2 && s.sets === 4));
+});
+
+test('個別休憩が0秒なら休憩を作らない / 新フィールドなしの古いメニューは従来どおり', () => {
+  const p = buildPlan(menu({ prepSec: 0, commonWorkSec: 5, setRestSec: 9 }, [{ id: 'a', name: 'A', workSec: 5, sets: 2, setRestSec: 0 }]));
+  assert.equal(kinds(p), 'w5 w5');
+  const old = buildPlan(menu({ prepSec: 0, commonWorkSec: 5, setRestSec: 9 }, [{ id: 'a', name: 'A', workSec: 5, sets: 2 }]));
+  assert.equal(kinds(old), 'w5 r9:s w5');
+});
+
+test('サーキットでは種目ごとの休憩設定は使われない', () => {
+  const p = buildPlan(menu({ repeatMode: 'circuit', laps: 2, prepSec: 0, commonWorkSec: 5, exerciseRestSec: 3, circuitRestSec: 7 }, [
+    { id: 'a', name: 'A', workSec: 5, sets: 9, cycles: 9, restAfterSec: 99 },
+    { id: 'b', name: 'B', workSec: 5, sets: 9 },
+  ]));
+  assert.equal(kinds(p), 'w5 r3:e w5 r7:l w5 r3:e w5');
+});
+
+test('個別休憩の補正（範囲外・空）', () => {
+  const m = sanitizeMenu({ name: 'x', items: [{ name: 'A', cycles: 500, setRestSec: 99999, cycleRestSec: '', restAfterSec: -3 }] });
+  assert.equal(m.items[0].cycles, 99);
+  assert.equal(m.items[0].setRestSec, 1800);
+  assert.equal(m.items[0].cycleRestSec, null);
+  assert.equal(m.items[0].restAfterSec, 0);
+  const d = sanitizeMenu({ name: 'x', items: [{ name: 'A' }] });
+  assert.deepEqual([d.items[0].cycles, d.items[0].setRestSec, d.items[0].restAfterSec], [1, null, null]);
+});

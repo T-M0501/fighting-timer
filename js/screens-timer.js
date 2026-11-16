@@ -20,7 +20,8 @@ function setText(seg, menu) {
   if (menu.repeatMode === 'circuit') {
     return `周回 ${seg.lap}/${seg.laps}　種目 ${seg.item + 1}/${menu.items.length}`;
   }
-  return `セット ${seg.set}/${seg.sets}　種目 ${seg.item + 1}/${menu.items.length}`;
+  const cyc = seg.cycles > 1 ? `サイクル ${seg.cycle}/${seg.cycles}　` : '';
+  return `${cyc}セット ${seg.set}/${seg.sets}　種目 ${seg.item + 1}/${menu.items.length}`;
 }
 
 export function renderTimer(root, id) {
