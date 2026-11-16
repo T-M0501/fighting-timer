@@ -83,7 +83,7 @@ export function renderMenus(root) {
   makeSortable(listEl, { onReorder: move });
   draw();
   mount(root, 
-    pageHeader('メニュー一覧', '#/', h('button', { class: 'btn btn-primary', onClick: () => app.go('#/menu/new/edit') }, '＋ 新規作成')),
+    pageHeader('メニュー一覧', '#/', h('button', { class: 'btn btn-primary', onClick: () => app.go('#/menu/new/edit') }, '＋新規')),
     listEl);
 }
 

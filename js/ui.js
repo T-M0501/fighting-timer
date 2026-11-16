@@ -6,7 +6,9 @@ import { formatDuration } from './model.js';
 
 export function pageHeader(title, backHash, right) {
   return h('header', { class: 'page-head' },
-    backHash ? h('button', { class: 'btn btn-ghost back', 'aria-label': '戻る', onClick: () => app.go(backHash) }, '← 戻る') : h('span'),
+    h('div', { class: 'head-left' },
+      backHash && backHash !== '#/' ? h('button', { class: 'btn btn-ghost back', 'aria-label': '戻る', onClick: () => app.go(backHash) }, '← 戻る') : null,
+      h('button', { class: 'btn home-btn', 'aria-label': 'トップ画面に戻る', onClick: () => app.go('#/') }, '🏠 ホーム')),
     h('h1', null, title),
     right || h('span'));
 }

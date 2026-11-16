@@ -42,7 +42,11 @@ h1, h2, p { margin: 0; }
 .home-head { padding: 14px 2px 6px; }
 .home-head h1 { font-size: 28px; color: var(--primary); letter-spacing: .02em; }
 .page-head { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 8px; padding: 4px 0 10px; position: sticky; top: 0; background: var(--bg); z-index: 5; }
-.page-head h1 { font-size: 19px; text-align: center; }
+.page-head h1 { font-size: 17px; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.head-left { display: flex; gap: 4px; align-items: center; }
+.home-btn { padding: 8px 10px; font-size: 14px; background: #fff; }
+.page-head .btn-ghost { padding: 8px 4px; font-size: 14px; }
+.page-head .btn-primary, .page-head .btn-danger-ghost { padding: 8px 10px; font-size: 14px; }
 
 /* ボタン */
 .btn {
