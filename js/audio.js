@@ -141,13 +141,31 @@ export class AudioEngine {
     }
   }
 
-  _pickVoice() {
+  /**
+   * 端末に入っている日本語音声から、女性/男性の声を選ぶ（名前で判定）。
+   * 男性の声が端末になければ、女性の声のピッチを下げた代用にする(substituted=true)。
+   */
+  pickVoice(gender) {
+    const MALE = /otoya|ichiro|hattori|takeru|kenji|taro|yuuto|naoki|keita|daichi|男性|\bmale\b/i;
+    const FEMALE = /female|女性/i;
+    let list = [];
     try {
-      const list = globalThis.speechSynthesis.getVoices();
-      return list.find((v) => v.lang === 'ja-JP') || list.find((v) => (v.lang || '').toLowerCase().startsWith('ja')) || null;
-    } catch {
-      return null;
+      list = globalThis.speechSynthesis.getVoices().filter((v) => /^ja/i.test(String(v.lang).replace('_', '-')));
+    } catch { /* 非対応 */ }
+    const isMale = (v) => MALE.test(v.name) && !FEMALE.test(v.name);
+    const males = list.filter(isMale);
+    const females = list.filter((v) => !isMale(v));
+    const best = (arr) => arr.find((v) => /premium|enhanced|natural|高品質|拡張/i.test(v.name)) || arr.find((v) => v.localService) || arr[0] || null;
+    if (gender === 'male') {
+      if (males.length) return { voice: best(males), substituted: false };
+      return { voice: best(females), substituted: true };
     }
+    return { voice: best(females.length ? females : males), substituted: false };
+  }
+
+  describeVoice(gender) {
+    const { voice, substituted } = this.pickVoice(gender);
+    return { name: voice ? voice.name : null, substituted };
   }
 
   speak(text, { force = false } = {}) {
@@ -160,10 +178,10 @@ export class AudioEngine {
       const u = new SpeechSynthesisUtterance(text);
       u.lang = 'ja-JP';
       u.volume = 1;
-      u.rate = 1;
-      u.pitch = 1;
-      const v = this._pickVoice();
-      if (v) u.voice = v;
+      const { voice, substituted } = this.pickVoice(st.voiceGender);
+      u.rate = substituted ? 0.95 : 1;
+      u.pitch = substituted ? 0.55 : 1; // 男性の声がない端末では、声を低くして代用
+      if (voice) u.voice = voice;
       s.speak(u);
     } catch (e) {
       console.warn('音声読み上げ失敗', e);

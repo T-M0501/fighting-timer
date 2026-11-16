@@ -1,5 +1,5 @@
 // 設定画面（音・試聴・バックアップ・復元・更新確認）
-import { h, mount, confirmDialog, alertDialog, toast } from './dom.js';
+import { h, mount, confirmDialog, alertDialog, toast, segmented } from './dom.js';
 import { app, saveSettings, applyRestore, hasPendingUpdate, tryApplyUpdate } from './core.js';
 import { buildBackup, validateBackup, COUNTDOWN_CHOICES, THEMES } from './model.js';
 import { themeIcon } from './glove.js';
@@ -112,6 +112,33 @@ export function renderSettings(root) {
     class: 'select', 'aria-label': 'カウントダウン電子音',
     onChange: (e) => saveSettings({ countdown: Number(e.target.value) }),
   }, COUNTDOWN_CHOICES.map((n) => h('option', { value: n, selected: n === st.countdown }, n === 0 ? 'なし' : `${n}秒前`)));
+  // 音声ガイドの声（女性/男性）。切り替えるとすぐ試聴できる
+  const voiceSeg = h('div');
+  const voiceHint = h('p', { class: 'meta' });
+  function drawVoice() {
+    const g = app.state.settings.voiceGender;
+    voiceSeg.replaceChildren(segmented({
+      label: '音声ガイドの声', value: g,
+      options: [{ value: 'female', label: '女性' }, { value: 'male', label: '男性' }],
+      onChange: async (v) => {
+        await saveSettings({ voiceGender: v });
+        drawVoice();
+        app.audio.unlock();
+        app.audio.speak('運動開始。次はスクワット', { force: true });
+      },
+    }));
+    const d = app.audio.describeVoice(g);
+    voiceHint.textContent = !d.name
+      ? 'この端末では日本語の音声を取得できていません。音声が出ない場合は、端末の設定で日本語の音声データを追加してください。'
+      : d.substituted
+        ? `この端末には男性の日本語音声が入っていないため、「${d.name}」を低い声にして代用します。`
+        : `使用する声：${d.name}（端末に入っている音声を使います）`;
+  }
+  drawVoice();
+  try {
+    speechSynthesis.addEventListener('voiceschanged', drawVoice);
+    app.cleanup = () => speechSynthesis.removeEventListener('voiceschanged', drawVoice);
+  } catch { /* 非対応 */ }
   const cdHint = h('p', { class: 'meta' });
   function updateCdHint() {
     const s = app.state.settings;
@@ -141,6 +168,9 @@ export function renderSettings(root) {
       h('h2', { class: 'sec in' }, '音'),
       toggleRow('電子音', '運動・休憩の切り替え音、カウントダウン音、終了メロディー', st.beepOn, async (v) => { await saveSettings({ beepOn: v }); updateCdHint(); }),
       toggleRow('音声ガイド（日本語）', '運動開始・休憩開始・次の種目名・終了', st.voiceOn, (v) => saveSettings({ voiceOn: v })),
+      h('div', { class: 'fld-label' }, '音声ガイドの声'),
+      voiceSeg,
+      voiceHint,
       h('div', { class: 'fld-label' }, '電子音の音量 ', volVal),
       slider,
       h('div', { class: 'fld-label' }, 'カウントダウン音（終わる何秒前から鳴らすか）'),
