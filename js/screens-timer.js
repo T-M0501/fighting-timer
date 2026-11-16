@@ -175,8 +175,28 @@ export function renderTimer(root, id) {
     handleEvents(events);
     update();
   }
+  // ---- 画面スリープ防止（設定でオン・トレーニング中のみ） ----
+  let wakeLock = null;
+  let wakeBusy = false;
+  async function syncWake() {
+    if (wakeBusy || !('wakeLock' in navigator)) return;
+    const active = eng.status === 'running' || eng.status === 'paused' || eng.status === 'resuming';
+    const want = app.state.settings.keepAwake && active && document.visibilityState === 'visible';
+    wakeBusy = true;
+    try {
+      if (want && !wakeLock) {
+        wakeLock = await navigator.wakeLock.request('screen');
+        wakeLock.addEventListener('release', () => { wakeLock = null; });
+      } else if (!want && wakeLock) {
+        await wakeLock.release();
+        wakeLock = null;
+      }
+    } catch { wakeLock = null; /* 非対応・省電力モード等では何もしない */ }
+    wakeBusy = false;
+  }
   const onVisible = () => {
     if (document.visibilityState === 'visible' && eng.status !== 'idle' && eng.status !== 'finished') loop(); // 実際の経過時間で復帰
+    syncWake();
   };
   document.addEventListener('visibilitychange', onVisible);
 
@@ -247,6 +267,7 @@ export function renderTimer(root, id) {
     if (shownStatus !== v.status) {
       shownStatus = v.status;
       renderButtons(v.status);
+      syncWake();
     }
   }
 
@@ -263,6 +284,8 @@ export function renderTimer(root, id) {
     clearInterval(intervalId);
     document.removeEventListener('visibilitychange', onVisible);
     app.audio.cancelSpeech();
+    try { wakeLock?.release(); } catch { /* ignore */ }
+    wakeLock = null;
   };
 
   update();

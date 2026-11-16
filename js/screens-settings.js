@@ -107,6 +107,10 @@ export function renderSettings(root) {
         h('button', { class: 'btn', onClick: () => { app.audio.unlock(); app.audio.beep('finish', { force: true }); } }, '終了メロディー')),
       h('p', { class: 'meta' }, '音が小さいときは、iPhone本体の音量を上げ、消音(サイレント)スイッチがオフになっているか確認してください。本アプリは端末の最大音量を超えて鳴らすことはできません。')),
     h('section', { class: 'card' },
+      h('h2', { class: 'sec in' }, '画面'),
+      toggleRow('トレーニング中は画面をスリープさせない', 'タイマー実行中（一時停止中も含む）だけ、画面を点灯したままにします。電池の消費が増えます', st.keepAwake, (v) => saveSettings({ keepAwake: v })),
+      'wakeLock' in navigator ? null : h('p', { class: 'meta' }, 'この端末・ブラウザは画面の点灯維持に対応していないため、この設定は働きません。')),
+    h('section', { class: 'card' },
       h('h2', { class: 'sec in' }, '通知（試験的）'),
       toggleRow('フェーズ切り替えを通知', '画面を閉じている間の通知は、端末の制限により届かないことがあります', st.notify, async (v) => {
         if (v && typeof Notification !== 'undefined' && Notification.permission !== 'granted') {

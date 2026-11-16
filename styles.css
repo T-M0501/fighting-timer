@@ -39,7 +39,8 @@ h1, h2, p { margin: 0; }
 .sec { font-size: 17px; margin: 18px 2px 8px; }
 .sec.in { margin: 0 0 8px; }
 
-.home-head { padding: 14px 2px 6px; }
+.home-head { padding: 14px 2px 6px; display: flex; align-items: center; gap: 12px; }
+.glove { width: 64px; height: 64px; flex: none; }
 .home-head h1 { font-size: 28px; color: var(--primary); letter-spacing: .02em; }
 .page-head { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 8px; padding: 4px 0 10px; position: sticky; top: 0; background: var(--bg); z-index: 5; }
 .page-head h1 { font-size: 17px; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -72,6 +73,10 @@ h1, h2, p { margin: 0; }
 .row-top { display: flex; align-items: center; gap: 8px; }
 .menu-main { flex: 1; min-width: 0; }
 .menu-name { font-weight: 700; overflow-wrap: anywhere; }
+.view-toggle { margin-bottom: 12px; }
+.detail { margin-top: 8px; padding: 8px 10px; background: #f8f9fa; border-radius: 10px; font-size: 14px; }
+.detail-settings { color: var(--muted); margin-bottom: 4px; }
+.detail-items { margin: 0; padding-left: 22px; }
 .row-actions { display: flex; gap: 8px; margin-top: 10px; align-items: center; }
 .row-actions.wrap { flex-wrap: wrap; }
 .row-actions .btn-primary { flex: 1; }

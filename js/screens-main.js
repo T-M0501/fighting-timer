@@ -1,7 +1,15 @@
 // ホーム・メニュー一覧・履歴・種目管理
-import { h, clear, mount, confirmDialog, toast, makeSortable, moveItem } from './dom.js';
-import { app, toggleFavorite, deleteMenu, reorderMenus, deleteHistory, clearHistory, historyNewestFirst, addExercise, removeExercise } from './core.js';
-import { pageHeader, menuSummary, fmtDateTime } from './ui.js';
+import { h, clear, mount, confirmDialog, toast, makeSortable, moveItem, segmented } from './dom.js';
+import { app, saveSettings, toggleFavorite, deleteMenu, reorderMenus, deleteHistory, clearHistory, historyNewestFirst, addExercise, removeExercise } from './core.js';
+import { gloveIcon } from './glove.js';
+import { pageHeader, menuSummary, menuDetail, fmtDateTime } from './ui.js';
+
+function detailBlock(m) {
+  const d = menuDetail(m);
+  return h('div', { class: 'detail' },
+    h('div', { class: 'detail-settings' }, d.settings.join(' ／ ')),
+    d.items.length ? h('ol', { class: 'detail-items' }, d.items.map((t) => h('li', null, t.replace(/^\d+\.\s/, '')))) : h('div', { class: 'meta' }, '種目がありません'));
+}
 import { formatDuration } from './model.js';
 
 function historyRow(rec, { deletable, onDelete } = {}) {
@@ -17,7 +25,7 @@ export function renderHome(root) {
   const favs = menus.filter((m) => m.favorite);
   const recent = historyNewestFirst().slice(0, 3);
   mount(root, 
-    h('header', { class: 'home-head' }, h('h1', null, 'Fighting Timer'), h('p', { class: 'meta' }, 'トレーニングタイマー')),
+    h('header', { class: 'home-head' }, gloveIcon(), h('div', null, h('h1', null, 'Fighting Timer'), h('p', { class: 'meta' }, 'キックボクシング用タイマー'))),
     menus.length === 0
       ? h('section', { class: 'card hero' },
         h('h2', null, 'はじめましょう'),
@@ -61,6 +69,7 @@ export function renderMenus(root) {
             onClick: async () => { await toggleFavorite(m.id); draw(); },
           }, m.favorite ? '★' : '☆'),
           h('div', { class: 'menu-main' }, h('div', { class: 'menu-name' }, m.name), h('div', { class: 'meta' }, menuSummary(m)))),
+        app.state.settings.menuView === 'detail' ? detailBlock(m) : null,
         h('div', { class: 'row-actions' },
           h('button', { class: 'btn btn-primary', disabled: m.items.length === 0, onClick: () => app.go(`#/run/${m.id}`) }, '開始'),
           h('button', { class: 'btn', onClick: () => app.go(`#/menu/${m.id}/edit`) }, '編集'),
@@ -82,8 +91,19 @@ export function renderMenus(root) {
   };
   makeSortable(listEl, { onReorder: move });
   draw();
-  mount(root, 
+  const viewToggle = h('div', { class: 'view-toggle' });
+  const drawToggle = () => {
+    clear(viewToggle);
+    viewToggle.append(segmented({
+      label: '表示切替', value: app.state.settings.menuView,
+      options: [{ value: 'simple', label: '通常表示' }, { value: 'detail', label: '詳細表示' }],
+      onChange: async (v) => { await saveSettings({ menuView: v }); drawToggle(); draw(); },
+    }));
+  };
+  drawToggle();
+  mount(root,
     pageHeader('メニュー一覧', '#/', h('button', { class: 'btn btn-primary', onClick: () => app.go('#/menu/new/edit') }, '＋新規')),
+    viewToggle,
     listEl);
 }
 

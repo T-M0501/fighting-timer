@@ -1,6 +1,6 @@
 // Service Worker: アプリ本体をキャッシュしてオフラインで起動できるようにする。
 // VERSION は tools/stamp-version.mjs が自動更新します（手で編集しないでください）。
-const VERSION = '2026.1116-e3f99613';
+const VERSION = '2026.1116-13da7728';
 const CACHE = 'fighting-timer-' + VERSION;
 const ASSETS = [
   './',
@@ -15,6 +15,7 @@ const ASSETS = [
   './js/model.js',
   './js/audio.js',
   './js/ui.js',
+  './js/glove.js',
   './js/version.js',
   './js/screens-main.js',
   './js/screens-edit.js',

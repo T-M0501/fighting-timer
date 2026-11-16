@@ -105,7 +105,7 @@ export function sanitizeHistory(raw) {
 }
 
 export function defaultSettings() {
-  return { beepOn: true, voiceOn: true, volume: 80, countdown: 3, notify: false };
+  return { beepOn: true, voiceOn: true, volume: 80, countdown: 3, notify: false, keepAwake: true, menuView: 'simple' };
 }
 
 export function sanitizeSettings(raw) {
@@ -118,6 +118,8 @@ export function sanitizeSettings(raw) {
     volume: clampInt(raw.volume, 0, 100, d.volume),
     countdown: COUNTDOWN_CHOICES.includes(cd) ? cd : d.countdown,
     notify: typeof raw.notify === 'boolean' ? raw.notify : d.notify,
+    keepAwake: typeof raw.keepAwake === 'boolean' ? raw.keepAwake : d.keepAwake,
+    menuView: raw.menuView === 'detail' ? 'detail' : 'simple',
   };
 }
 

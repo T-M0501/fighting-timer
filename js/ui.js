@@ -23,7 +23,27 @@ export function menuSummary(menu) {
   return `${mode} ・ ${menu.items.length}種目 ・ 合計 ${total ? formatDuration(total) : '—'}`;
 }
 
-const WD = ['日', '月', '火', '水', '木', '金', '土'];
+/** 詳細表示用: 設定の要約と種目一覧 */
+export function menuDetail(menu) {
+  const d = formatDuration;
+  const settings = [];
+  if (menu.timeMode === 'common') settings.push(`運動 ${d(menu.commonWorkSec)}`);
+  settings.push(`準備 ${menu.prepSec ? d(menu.prepSec) : 'なし'}`);
+  if (menu.repeatMode === 'circuit') {
+    settings.push(`${menu.laps}周`, `種目間休憩 ${d(menu.exerciseRestSec)}`, `周回間休憩 ${d(menu.circuitRestSec)}`);
+  } else {
+    settings.push(`セット間休憩 ${d(menu.setRestSec)}`, `種目間休憩 ${d(menu.exerciseRestSec)}`);
+  }
+  const items = menu.items.map((it, i) => {
+    const parts = [];
+    if (menu.timeMode === 'individual') parts.push(d(it.workSec));
+    if (menu.repeatMode !== 'circuit') parts.push(`${it.sets}セット`);
+    return `${i + 1}. ${it.name}${parts.length ? '　' + parts.join(' × ') : ''}`;
+  });
+  return { settings, items };
+}
+
+const WD =['日', '月', '火', '水', '木', '金', '土'];
 export function fmtDateTime(iso) {
   const d = new Date(iso);
   const p = (n) => String(n).padStart(2, '0');
