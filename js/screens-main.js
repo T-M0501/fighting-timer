@@ -32,7 +32,7 @@ export function renderHome(root) {
       ? h('section', { class: 'card hero' },
         h('h2', null, 'はじめましょう'),
         h('p', null, 'まだトレーニングメニューがありません。最初のメニューを作りましょう。'),
-        h('button', { class: 'btn btn-primary btn-lg', onClick: () => app.go('#/menu/new/edit') }, 'メニューを新規作成'))
+        h('button', { class: 'btn btn-primary btn-lg', onClick: () => app.go('#/menu/new/edit') }, '最初のメニューを作る'))
       : null,
     h('section', null,
       h('h2', { class: 'sec' }, '★ お気に入りメニュー'),
@@ -57,7 +57,7 @@ export function renderMenus(root) {
     clear(listEl);
     const menus = app.state.menus;
     if (!menus.length) {
-      listEl.append(h('li', { class: 'meta pad' }, 'メニューがありません。「＋ 新規作成」から作りましょう。'));
+      listEl.append(h('li', { class: 'meta pad' }, 'まだメニューがありません。右上の「＋新規」から作りましょう。'));
       return;
     }
     menus.forEach((m, i) => {
@@ -117,7 +117,7 @@ export function renderHistory(root) {
       const ok = await confirmDialog({ title: '履歴をすべて削除しますか？', message: `${app.state.history.length}件の履歴を削除します。元に戻せません。`, okText: 'すべて削除', danger: true });
       if (ok) { await clearHistory(); draw(); toast('すべて削除しました'); }
     },
-  }, '全件削除');
+  }, 'すべて削除');
   const draw = () => {
     clear(listEl);
     const list = historyNewestFirst();

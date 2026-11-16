@@ -146,7 +146,7 @@ export function renderSettings(root) {
       ? '※「電子音」がオフのため、カウントダウン音は鳴りません。鳴らすには上の「電子音」をオンにしてください。'
       : s.countdown === 0
         ? 'カウントダウン音は鳴りません（「なし」）。'
-        : `準備・運動・休憩のどれも、終わる ${s.countdown}秒前から1秒ごとに「ピッ」と鳴り、切り替わりで切り替え音が鳴ります。`;
+        : `準備・運動・休憩が終わる${s.countdown}秒前から、1秒ごとに「ピッ」と鳴ります。`;
     cdHint.classList.toggle('warn-text', !s.beepOn);
   }
   cdSelect.addEventListener('change', updateCdHint);
@@ -182,14 +182,14 @@ export function renderSettings(root) {
         h('button', { class: 'btn', onClick: () => { app.audio.unlock(); app.audio.beep('count', { force: true }); } }, 'カウントダウン'),
         h('button', { class: 'btn', onClick: () => { app.audio.unlock(); app.audio.speak('運動開始。次はスクワット', { force: true }); } }, '音声ガイド'),
         h('button', { class: 'btn', onClick: () => { app.audio.unlock(); app.audio.beep('finish', { force: true }); } }, '終了メロディー')),
-      h('p', { class: 'meta' }, '音が小さいときは、iPhone本体の音量を上げ、消音(サイレント)スイッチがオフになっているか確認してください。本アプリは端末の最大音量を超えて鳴らすことはできません。')),
+      h('p', { class: 'meta' }, '音が小さいときは、端末本体の音量を上げ、マナーモード（消音）になっていないか確認してください。このアプリは、端末の最大音量より大きな音は出せません。')),
     h('section', { class: 'card' },
       h('h2', { class: 'sec in' }, '画面'),
-      toggleRow('トレーニング中は画面をスリープさせない', 'タイマー実行中（一時停止中も含む）だけ、画面を点灯したままにします。電池の消費が増えます', st.keepAwake, (v) => saveSettings({ keepAwake: v })),
-      'wakeLock' in navigator ? null : h('p', { class: 'meta' }, 'この端末・ブラウザは画面の点灯維持に対応していないため、この設定は働きません。')),
+      toggleRow('トレーニング中は画面をスリープさせない', 'タイマーが動いている間（一時停止中も含む）だけ、画面をつけたままにします。電池の減りは早くなります', st.keepAwake, (v) => saveSettings({ keepAwake: v })),
+      'wakeLock' in navigator ? null : h('p', { class: 'meta' }, 'この端末（またはブラウザ）は対応していないため、この設定は使えません。')),
     h('section', { class: 'card' },
-      h('h2', { class: 'sec in' }, '通知（試験的）'),
-      toggleRow('フェーズ切り替えを通知', '画面を閉じている間の通知は、端末の制限により届かないことがあります', st.notify, async (v) => {
+      h('h2', { class: 'sec in' }, '通知（お試し機能）'),
+      toggleRow('運動・休憩の切り替わりを通知', '画面を閉じている間は、端末の制限で通知が届かないことがあります', st.notify, async (v) => {
         if (v && typeof Notification !== 'undefined' && Notification.permission !== 'granted') {
           const p = await Notification.requestPermission().catch(() => 'denied');
           if (p !== 'granted') { toast('通知が許可されませんでした'); await saveSettings({ notify: false }); app.go('#/settings'); return; }
@@ -202,7 +202,7 @@ export function renderSettings(root) {
       h('button', { class: 'btn btn-block btn-primary', onClick: exportBackup }, 'バックアップを保存'),
       h('button', { class: 'btn btn-block', onClick: () => fileInput.click() }, 'バックアップから復元'),
       fileInput,
-      h('p', { class: 'meta' }, 'メニュー・登録種目・履歴・設定を1つのファイルにまとめて保存します。iPhoneでは「ファイルに保存」やiCloud Driveを選べます。')),
+      h('p', { class: 'meta' }, 'メニュー・登録種目・履歴・設定を1つのファイルにまとめて保存します。保存先は、表示された画面で選べます（iPhoneの「ファイルに保存」、Googleドライブなど）。')),
     h('section', { class: 'card' },
       h('h2', { class: 'sec in' }, 'アプリのURL（共有用）'),
       h('input', { type: 'text', class: 'text url-box', readonly: true, value: shareUrl(), 'aria-label': '共有用URL', onFocus: (e) => e.target.select() }),
@@ -217,7 +217,7 @@ export function renderSettings(root) {
         class: 'btn btn-block',
         onClick: async () => {
           try { await app.swReg?.update(); } catch { /* オフライン等 */ }
-          if (hasPendingUpdate()) { toast('新しいバージョンを準備しました'); tryApplyUpdate(); } else toast('最新の状態です（または確認できませんでした）');
+          if (hasPendingUpdate()) { toast('新しいバージョンを準備しました'); tryApplyUpdate(); } else toast('新しいバージョンは見つかりませんでした');
         },
       }, '更新を確認')),
   );

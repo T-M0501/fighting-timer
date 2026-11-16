@@ -47,7 +47,7 @@ export function flowLines(menu) {
     });
     rows.push({
       type: 'loop',
-      text: `↑ 以上を ${menu.laps}周（周回間 ${menu.circuitRestSec > 0 ? '休憩 ' + d(menu.circuitRestSec) : '休憩なし'}）`,
+      text: `↑ ここまでを ${menu.laps}周（周回間${menu.circuitRestSec > 0 ? '休憩 ' + d(menu.circuitRestSec) : '休憩なし'}）`,
       time: `1周 ${d(lapSec)}`,
     });
   } else {
@@ -93,7 +93,7 @@ export function menuDetail(menu) {
       if (it.cycles > 1) parts.push(`${it.cycles}サイクル`);
       if (it.setRestSec != null) extra.push(`セット間休憩${d(it.setRestSec)}`);
       if (it.cycleRestSec != null && it.cycles > 1) extra.push(`サイクル間休憩${d(it.cycleRestSec)}`);
-      if (it.restAfterSec != null) extra.push(`終了後の休憩${d(it.restAfterSec)}`);
+      if (it.restAfterSec != null) extra.push(`この種目のあとの休憩${d(it.restAfterSec)}`);
     }
     return `${i + 1}. ${it.name}${parts.length ? '　' + parts.join(' × ') : ''}${extra.length ? '（' + extra.join('、') + '）' : ''}`;
   });

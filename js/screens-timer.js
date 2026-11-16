@@ -212,7 +212,7 @@ export function renderTimer(root, id) {
     screen.className = `timer-screen phase-${phase}` + (v.status === 'paused' ? ' is-paused' : '');
 
     if (v.status === 'idle') {
-      elPhase.textContent = '合計予定時間';
+      elPhase.textContent = '合計時間';
       elName.textContent = menu.name;
       elTime.textContent = formatClock(plan.totalSec);
       elBarFill.style.width = '0%';
@@ -233,7 +233,7 @@ export function renderTimer(root, id) {
       elTime.textContent = formatClock(v.remainingSec);
       elBarFill.style.width = `${Math.min(100, v.progress * 100).toFixed(1)}%`;
       elBar.setAttribute('aria-valuenow', String(Math.round(v.progress * 100)));
-      elSet.textContent = setText(seg, menu) + (seg.kind === 'rest' ? '（次の運動）' : '');
+      elSet.textContent = (seg.kind === 'rest' ? '次の運動：' : '') + setText(seg, menu);
       elNext.textContent = nextText(plan, v.index);
       elTotal.textContent = `全体の残り ${formatClock(Math.ceil(v.totalRemainingMs / 1000))}`;
     }
