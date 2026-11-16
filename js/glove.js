@@ -22,8 +22,16 @@ const ICONS = {
   <path d="M30 46l-3 11M34 46l3 11" stroke="#16181b" stroke-width="3" stroke-linecap="round"/>
 </svg>`,
   karate: `<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="空手">
-  <circle cx="32" cy="32" r="27" fill="#d9342b"/>
-  <text x="32" y="44" text-anchor="middle" font-size="34" font-weight="700" fill="#fff" font-family="'Hiragino Mincho ProN','Yu Mincho','Noto Serif JP',serif">空</text>
+  <circle cx="32" cy="32" r="28" fill="#d9342b"/>
+  <g stroke="#16181b" stroke-width="2" stroke-linejoin="round">
+    <rect x="17" y="17" width="7.5" height="16" rx="3.7" fill="#fff"/>
+    <rect x="25" y="14" width="7.5" height="19" rx="3.7" fill="#fff"/>
+    <rect x="33" y="14" width="7.5" height="19" rx="3.7" fill="#fff"/>
+    <rect x="41" y="17" width="7.5" height="16" rx="3.7" fill="#fff"/>
+    <rect x="16" y="28" width="33" height="19" rx="7" fill="#fff"/>
+    <rect x="19" y="36" width="24" height="8" rx="4" fill="#e9ecef"/>
+    <rect x="21" y="46" width="23" height="9" rx="2" fill="#16181b"/>
+  </g>
 </svg>`,
 };
 
