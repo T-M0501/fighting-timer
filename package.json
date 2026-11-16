@@ -1,0 +1,13 @@
+{
+  "name": "fighting-timer",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Fighting Timer - 無料で使えるトレーニングタイマーPWA",
+  "scripts": {
+    "test": "node --test tests/",
+    "serve": "node tools/serve.mjs",
+    "icons": "node tools/make-icons.mjs",
+    "stamp": "node tools/stamp-version.mjs"
+  }
+}
