@@ -3,7 +3,7 @@ import { h, clear, mount, confirmDialog, openModal, toast, timeField, numberFiel
 import { app, saveMenu, addExercise } from './core.js';
 import { buildPlan } from './engine.js';
 import { defaultMenu, newItem, LIMITS, formatDuration } from './model.js';
-import { pageHeader } from './ui.js';
+import { pageHeader, flowLines } from './ui.js';
 
 export function renderEditor(root, id) {
   const isNew = id === 'new';
@@ -28,7 +28,13 @@ export function renderEditor(root, id) {
   const form = h('div', { class: 'form' });
   const totalEl = h('div', { class: 'total-box' });
 
+  const flowBox = h('details', { class: 'card flow-box' }, h('summary', null, 'このメニューの流れを確認する'));
+  const flowList = h('ol', { class: 'flow-list' });
+  flowBox.append(flowList);
+
   const updateTotal = () => {
+    clear(flowList);
+    for (const line of flowLines(draft)) flowList.append(h('li', { class: line.startsWith('↓') ? 'flow-rest' : '' }, line));
     const plan = buildPlan({ ...draft, laps: draft.laps });
     clear(totalEl);
     totalEl.append(
@@ -49,42 +55,48 @@ export function renderEditor(root, id) {
     form.append(
       h('section', { class: 'card' }, h('label', { class: 'fld-label' }, 'メニュー名'), nameInput),
       h('section', { class: 'card' },
-        h('div', { class: 'fld-label' }, '運動時間の決め方'),
+        h('div', { class: 'fld-label' }, '① 運動時間'),
         segmented({
           label: '運動時間の決め方', value: draft.timeMode,
-          options: [{ value: 'common', label: '全種目共通' }, { value: 'individual', label: '種目ごとに設定' }],
+          options: [{ value: 'common', label: '全種目 同じ時間' }, { value: 'individual', label: '種目ごとに別の時間' }],
           onChange: (v) => { draft.timeMode = v; build(); },
         }),
-        individual ? h('p', { class: 'meta' }, '運動時間は下の各種目で設定します。') : timeField({
-          label: '運動時間（共通）', value: draft.commonWorkSec, min: 1, max: T,
+        individual ? h('p', { class: 'meta' }, '運動時間は、下の各種目ごとに設定します。') : timeField({
+          label: '運動時間（1セットで運動する長さ）', value: draft.commonWorkSec, min: 1, max: T,
           onChange: (v) => { draft.commonWorkSec = v; updateTotal(); },
         })),
       h('section', { class: 'card' },
-        h('div', { class: 'fld-label' }, '進め方'),
+        h('div', { class: 'fld-label' }, '② 進め方'),
         segmented({
           label: '進め方', value: draft.repeatMode,
-          options: [{ value: 'exercise', label: '種目ごとに全セット' }, { value: 'circuit', label: 'サーキット' }],
+          options: [{ value: 'exercise', label: '1種目ずつ' }, { value: 'circuit', label: 'サーキット' }],
           onChange: (v) => { draft.repeatMode = v; build(); },
         }),
-        h('p', { class: 'meta' }, circuit ? '登録した種目を順番に1周し、それを周回数だけ繰り返します。' : '1つの種目のセットを全部終えてから、次の種目へ進みます。'),
+        h('p', { class: 'meta' }, circuit
+          ? 'サーキット：全種目を1回ずつ順番に行い、それを「周回数」だけ繰り返します。'
+          : '1種目ずつ：1つの種目の「セット」をすべて終えてから、次の種目へ進みます。種目ごとに「サイクル」（セットのかたまりの繰り返し）も設定できます。'),
         circuit ? numberField({
-          label: '周回数', value: draft.laps, min: 1, max: LIMITS.MAX_LAPS, steps: [-1, 1], format: (v) => `${v}周`,
+          label: '周回数（全種目を何周するか）', value: draft.laps, min: 1, max: LIMITS.MAX_LAPS, steps: [-1, 1], format: (v) => `${v}周`,
           onChange: (v) => { draft.laps = v; updateTotal(); },
         }) : null),
       h('section', { class: 'card' },
-        h('div', { class: 'fld-label' }, '準備・休憩'),
-        timeField({ label: '準備時間（0秒で即開始）', value: draft.prepSec, min: 0, max: T, onChange: (v) => { draft.prepSec = v; updateTotal(); } }),
-        circuit ? null : timeField({ label: 'セット間の休憩', value: draft.setRestSec, min: 0, max: T, onChange: (v) => { draft.setRestSec = v; updateTotal(); } }),
-        timeField({ label: '種目間の休憩', value: draft.exerciseRestSec, min: 0, max: T, onChange: (v) => { draft.exerciseRestSec = v; updateTotal(); } }),
-        timeField({
-          label: circuit ? '周回間の休憩' : 'サイクル間の休憩（同じ種目を繰り返すとき）', value: draft.circuitRestSec, min: 0, max: T,
+        h('div', { class: 'fld-label' }, '③ 準備と休憩'),
+        timeField({ label: '準備時間（最初の運動の前。0秒なら すぐ開始）', value: draft.prepSec, min: 0, max: T, onChange: (v) => { draft.prepSec = v; updateTotal(); } }),
+        circuit ? null : timeField({ label: 'セット間の休憩（運動と運動のあいだ）', value: draft.setRestSec, min: 0, max: T, onChange: (v) => { draft.setRestSec = v; updateTotal(); } }),
+        circuit ? null : timeField({
+          label: 'サイクル間の休憩（サイクルが終わって、次のサイクルに入る前）', value: draft.circuitRestSec, min: 0, max: T,
           onChange: (v) => { draft.circuitRestSec = v; updateTotal(); },
         }),
-        circuit ? null : h('p', { class: 'meta' }, '各種目の「休憩の個別設定」で、種目ごとに別の休憩にもできます。')),
+        timeField({ label: '種目間の休憩（次の種目に移る前）', value: draft.exerciseRestSec, min: 0, max: T, onChange: (v) => { draft.exerciseRestSec = v; updateTotal(); } }),
+        circuit ? timeField({
+          label: '周回間の休憩（1周終わって、次の周回に入る前）', value: draft.circuitRestSec, min: 0, max: T,
+          onChange: (v) => { draft.circuitRestSec = v; updateTotal(); },
+        }) : h('p', { class: 'meta' }, 'ここはメニュー全体の共通の値です。種目ごとに変えたいときは、下の各種目の「この種目だけ休憩を変える」を使います。')),
       h('section', null,
-        h('h2', { class: 'sec' }, `種目（${draft.items.length}）`),
+        h('h2', { class: 'sec' }, `④ 種目（${draft.items.length}）`),
         itemsList(),
         h('button', { class: 'btn btn-primary btn-lg btn-block', onClick: openPicker }, '＋ 種目を追加')),
+      flowBox,
     );
     updateTotal();
   }
@@ -105,11 +117,11 @@ export function renderEditor(root, id) {
           h('button', { class: 'btn btn-danger-ghost btn-icon', 'aria-label': `${it.name}を外す`, onClick: () => { draft.items.splice(i, 1); build(); } }, '✕')),
         individual ? timeField({ label: '運動時間', value: it.workSec, min: 1, max: T, onChange: (v) => { it.workSec = v; updateTotal(); } }) : null,
         circuit ? null : numberField({
-          label: 'セット数', value: it.sets, min: 1, max: LIMITS.MAX_SETS, steps: [-1, 1], format: (v) => `${v}セット`,
+          label: 'セット数（運動を何回行うか）', value: it.sets, min: 1, max: LIMITS.MAX_SETS, steps: [-1, 1], format: (v) => `${v}セット`,
           onChange: (v) => { it.sets = v; updateTotal(); },
         }),
         circuit ? null : numberField({
-          label: 'サイクル数（セットをまとめて繰り返す回数）', value: it.cycles, min: 1, max: LIMITS.MAX_SETS, steps: [-1, 1], format: (v) => `${v}サイクル`,
+          label: 'サイクル数（このセットを何回繰り返すか）', value: it.cycles, min: 1, max: LIMITS.MAX_SETS, steps: [-1, 1], format: (v) => `${v}サイクル`,
           onChange: (v) => { it.cycles = v; updateTotal(); },
         }),
         circuit ? null : restOverrides(it)));
@@ -121,12 +133,12 @@ export function renderEditor(root, id) {
   /** 種目ごとの休憩の個別設定（チェックを外すとメニュー共通の値を使う） */
   function restOverrides(it) {
     const rows = [
-      ['setRestSec', 'この種目のセット間休憩', () => draft.setRestSec],
-      ['cycleRestSec', 'この種目のサイクル間休憩', () => draft.circuitRestSec],
-      ['restAfterSec', 'この種目が終わったあとの休憩（次の種目へ）', () => draft.exerciseRestSec],
+      ['setRestSec', 'セット間の休憩', () => draft.setRestSec],
+      ['cycleRestSec', 'サイクル間の休憩', () => draft.circuitRestSec],
+      ['restAfterSec', 'この種目が終わったあと、次の種目に移る前の休憩', () => draft.exerciseRestSec],
     ];
     const used = rows.some(([k]) => it[k] !== null && it[k] !== undefined);
-    const det = h('details', { class: 'ovr-box', open: used }, h('summary', null, '休憩の個別設定'));
+    const det = h('details', { class: 'ovr-box', open: used }, h('summary', null, 'この種目だけ休憩を変える（任意）'));
     for (const [key, label, menuVal] of rows) {
       const wrap = h('div', { class: 'ovr' });
       const draw = () => {
@@ -138,7 +150,7 @@ export function renderEditor(root, id) {
               type: 'checkbox', checked: on,
               onChange: (e) => { it[key] = e.target.checked ? menuVal() : null; draw(); updateTotal(); },
             }),
-            h('span', null, on ? label : `${label}：共通（${formatDuration(menuVal())}）`)),
+            h('span', null, on ? `${label}（この種目だけ）` : `${label}：メニュー共通のまま（${formatDuration(menuVal())}）`)),
           on ? timeField({ label: '秒数', value: it[key], min: 0, max: T, onChange: (v) => { it[key] = v; updateTotal(); } }) : null);
       };
       draw();

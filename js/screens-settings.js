@@ -112,6 +112,18 @@ export function renderSettings(root) {
     class: 'select', 'aria-label': 'カウントダウン電子音',
     onChange: (e) => saveSettings({ countdown: Number(e.target.value) }),
   }, COUNTDOWN_CHOICES.map((n) => h('option', { value: n, selected: n === st.countdown }, n === 0 ? 'なし' : `${n}秒前`)));
+  const cdHint = h('p', { class: 'meta' });
+  function updateCdHint() {
+    const s = app.state.settings;
+    cdHint.textContent = !s.beepOn
+      ? '※「電子音」がオフのため、カウントダウン音は鳴りません。鳴らすには上の「電子音」をオンにしてください。'
+      : s.countdown === 0
+        ? 'カウントダウン音は鳴りません（「なし」）。'
+        : `準備・運動・休憩のどれも、終わる ${s.countdown}秒前から1秒ごとに「ピッ」と鳴り、切り替わりで切り替え音が鳴ります。`;
+    cdHint.classList.toggle('warn-text', !s.beepOn);
+  }
+  cdSelect.addEventListener('change', updateCdHint);
+  updateCdHint();
   const fileInput = h('input', { type: 'file', accept: '.json,application/json', hidden: true, onChange: (e) => { importBackup(e.target.files[0]); e.target.value = ''; } });
 
   mount(root, 
@@ -127,12 +139,13 @@ export function renderSettings(root) {
       h('p', { class: 'meta' }, '色と、トップ画面のイラストが変わります。タイマー画面の色(準備=黄・運動=緑・休憩=青)は変わりません。')),
     h('section', { class: 'card' },
       h('h2', { class: 'sec in' }, '音'),
-      toggleRow('電子音', '切り替え・カウントダウンの音', st.beepOn, (v) => saveSettings({ beepOn: v })),
+      toggleRow('電子音', '運動・休憩の切り替え音、カウントダウン音、終了メロディー', st.beepOn, async (v) => { await saveSettings({ beepOn: v }); updateCdHint(); }),
       toggleRow('音声ガイド（日本語）', '運動開始・休憩開始・次の種目名・終了', st.voiceOn, (v) => saveSettings({ voiceOn: v })),
       h('div', { class: 'fld-label' }, '電子音の音量 ', volVal),
       slider,
-      h('div', { class: 'fld-label' }, 'カウントダウン電子音'),
+      h('div', { class: 'fld-label' }, 'カウントダウン音（終わる何秒前から鳴らすか）'),
       cdSelect,
+      cdHint,
       h('div', { class: 'fld-label' }, '試聴'),
       h('div', { class: 'row-actions wrap' },
         h('button', { class: 'btn', onClick: () => { app.audio.unlock(); app.audio.beep('work', { force: true }); } }, '電子音（開始）'),

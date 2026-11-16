@@ -103,16 +103,27 @@ export class AudioEngine {
     if (!force && !st.beepOn) return;
     if (!this.ctx) this.unlock();
     if (!this.ctx) return;
-    if (this.ctx.state !== 'running') this.ctx.resume().catch(() => {});
     const nowMs = performance.now();
     if (kind === 'count' || kind === 'resume') {
       if (nowMs - this.lastBeepAt < 120) return; // 連続音の重複防止
     }
     this.lastBeepAt = nowMs;
+    if (this.ctx.state === 'running') {
+      this._play(kind);
+      return;
+    }
+    // 音声再生などで一時停止(suspended/interrupted)になっていたら、再開できてから鳴らす。
+    // 再開に0.5秒以上かかったときは、遅れた音が重なって鳴らないよう捨てる。
+    this.ctx.resume().then(() => {
+      if (performance.now() - nowMs < 500 && this.ctx.state === 'running') this._play(kind);
+    }).catch(() => {});
+  }
+
+  _play(kind) {
     this.master.gain.cancelScheduledValues(this.ctx.currentTime);
     this.master.gain.setValueAtTime(this._volume(), this.ctx.currentTime);
     switch (kind) {
-      case 'count': this._tone(1000, 0, 0.12); break;
+      case 'count': this._tone(1000, 0, 0.18); break;
       case 'resume': this._tone(800, 0, 0.09); break;
       case 'prep': this._tone(988, 0, 0.28); break;
       case 'work': this._tone(1320, 0, 0.16); this._tone(1760, 0.19, 0.34); break; // 上昇音=開始

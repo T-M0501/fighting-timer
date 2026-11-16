@@ -216,7 +216,7 @@ export function renderTimer(root, id) {
       elName.textContent = menu.name;
       elTime.textContent = formatClock(plan.totalSec);
       elBarFill.style.width = '0%';
-      elSet.textContent = `${menu.items.length}種目 ・ ${menu.repeatMode === 'circuit' ? `サーキット ${menu.laps}周` : '種目ごとに全セット'}`;
+      elSet.textContent = `${menu.items.length}種目 ・ ${menu.repeatMode === 'circuit' ? `サーキット ${menu.laps}周` : '1種目ずつ'}`;
       elNext.textContent = plan.segments[0] ? (plan.segments[0].kind === 'prep' ? `最初：準備 ${formatDuration(plan.segments[0].dur)}` : `最初：${plan.segments[0].name}`) : '';
       elTotal.textContent = '「開始」を押すとスタートします';
     } else if (v.status === 'finished') {

@@ -19,8 +19,39 @@ export function menuTotalSec(menu) {
 
 export function menuSummary(menu) {
   const total = menuTotalSec(menu);
-  const mode = menu.repeatMode === 'circuit' ? `サーキット ${menu.laps}周` : '種目ごと';
+  const mode = menu.repeatMode === 'circuit' ? `サーキット ${menu.laps}周` : '1種目ずつ';
   return `${mode} ・ ${menu.items.length}種目 ・ 合計 ${total ? formatDuration(total) : '—'}`;
+}
+
+/** 編集画面用: このメニューがどう進むかを日本語で説明（'↓'で始まる行は休憩） */
+export function flowLines(menu) {
+  const d = formatDuration;
+  const items = menu.items || [];
+  if (!items.length) return ['種目を追加すると、ここに流れが表示されます。'];
+  const pick = (v, def) => (v === null || v === undefined ? def : v);
+  const rest = (sec) => (sec > 0 ? `↓ 休憩 ${d(sec)}` : null);
+  const lines = [];
+  if (menu.prepSec > 0) lines.push(`準備 ${d(menu.prepSec)}`);
+  const work = (it) => (menu.timeMode === 'individual' ? it.workSec : menu.commonWorkSec);
+  if (menu.repeatMode === 'circuit') {
+    for (let i = 0; i < items.length; i++) {
+      lines.push(`${items[i].name}（運動 ${d(work(items[i]))}）`);
+      if (i < items.length - 1) { const r = rest(menu.exerciseRestSec); if (r) lines.push(r); }
+    }
+    lines.push(`↑ ここまでを ${menu.laps}周 くり返します` + (menu.circuitRestSec > 0 ? `（周回の間は休憩 ${d(menu.circuitRestSec)}）` : ''));
+    return lines;
+  }
+  items.forEach((it, i) => {
+    const setRest = pick(it.setRestSec, menu.setRestSec);
+    const cycleRest = pick(it.cycleRestSec, menu.circuitRestSec);
+    const cycles = it.cycles || 1;
+    let s = `${it.name}：運動 ${d(work(it))} を ${it.sets}セット`;
+    if (it.sets > 1) s += setRest > 0 ? `（セットの間は休憩 ${d(setRest)}）` : '（セットの間は休憩なし）';
+    if (cycles > 1) s += ` → これを ${cycles}サイクル` + (cycleRest > 0 ? `（サイクルの間は休憩 ${d(cycleRest)}）` : '（サイクルの間は休憩なし）');
+    lines.push(s);
+    if (i < items.length - 1) { const r = rest(pick(it.restAfterSec, menu.exerciseRestSec)); if (r) lines.push(r); }
+  });
+  return lines;
 }
 
 /** 詳細表示用: 設定の要約と種目一覧 */

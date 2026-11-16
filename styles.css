@@ -90,6 +90,11 @@ h1, h2, p { margin: 0; }
 .ovr { margin-bottom: 6px; }
 .ovr-chk { display: flex; align-items: center; gap: 10px; min-height: 44px; font-size: 14px; }
 .ovr-chk input { width: 22px; height: 22px; accent-color: var(--primary); flex: none; }
+.warn-text { color: var(--danger); font-weight: 700; }
+.flow-box summary { min-height: 44px; display: flex; align-items: center; font-weight: 700; cursor: pointer; }
+.flow-list { margin: 4px 0 0; padding-left: 0; list-style: none; font-size: 14px; }
+.flow-list li { padding: 4px 0; }
+.flow-list li.flow-rest { color: var(--muted); padding-left: 14px; }
 .view-toggle { margin-bottom: 12px; }
 .detail { margin-top: 8px; padding: 8px 10px; background: #f8f9fa; border-radius: 10px; font-size: 14px; }
 .detail-settings { color: var(--muted); margin-bottom: 4px; }
@@ -123,7 +128,7 @@ section > .list > li.card.menu-card, section > .list > li.card.item { display: b
 .seg-btn.on { background: var(--primary); color: #fff; }
 .nf { margin: 10px 0; }
 .nf-label { display: flex; justify-content: space-between; gap: 8px; font-size: 14px; color: var(--muted); margin-bottom: 4px; }
-.nf-fmt { color: var(--text); font-weight: 700; }
+.nf-fmt { color: var(--text); font-weight: 700; white-space: nowrap; flex: none; }
 .nf-row { display: grid; grid-template-columns: repeat(var(--cols, 5), 1fr); gap: 6px; align-items: center; }
 .nf-row input { width: 100%; min-height: 44px; text-align: center; font: inherit; font-size: 18px; font-weight: 700; border: 1px solid var(--line); border-radius: 12px; min-width: 0; }
 .bottom-bar { position: fixed; left: 0; right: 0; bottom: 0; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 14px calc(10px + var(--sab)); background: #fff; border-top: 1px solid var(--line); z-index: 8; }
