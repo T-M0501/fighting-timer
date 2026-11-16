@@ -9,7 +9,7 @@ const sampleState = () => ({
   menus: [{ ...defaultMenu(1), name: 'メニューA', items: [{ id: 'i1', name: 'スクワット', workSec: 30, sets: 3 }] }],
   exercises: [{ id: 'e1', name: 'スクワット' }],
   history: [{ id: 'h1', at: '2026-11-16T05:00:00.000Z', menuName: 'メニューA', durationSec: 300 }],
-  settings: { beepOn: false, voiceOn: true, volume: 50, countdown: 5, notify: false, keepAwake: false, menuView: 'detail' },
+  settings: { beepOn: false, voiceOn: true, volume: 50, countdown: 5, notify: false, keepAwake: false, menuView: 'detail', theme: 'judo' },
 });
 
 test('バックアップ: 書き出し→検証で内容が一致する', () => {
@@ -62,7 +62,9 @@ test('バックアップ: ID重複は除去', () => {
 });
 
 test('設定の補正', () => {
-  assert.deepEqual(sanitizeSettings(null), { beepOn: true, voiceOn: true, volume: 80, countdown: 3, notify: false, keepAwake: true, menuView: 'simple' });
+  assert.deepEqual(sanitizeSettings(null), { beepOn: true, voiceOn: true, volume: 80, countdown: 3, notify: false, keepAwake: true, menuView: 'simple', theme: 'kickboxing' });
+  assert.equal(sanitizeSettings({ theme: 'karate' }).theme, 'karate');
+  assert.equal(sanitizeSettings({ theme: 'bogus' }).theme, 'kickboxing');
   const s = sanitizeSettings({ volume: 500, countdown: 7, beepOn: 'x' });
   assert.equal(s.volume, 100);
   assert.equal(s.countdown, 3);

@@ -3,8 +3,16 @@ import { openStore } from './db.js';
 import { AudioEngine } from './audio.js';
 import {
   DEFAULT_EXERCISE_NAMES, newId, sanitizeSettings, sanitizeMenu, sanitizeExercise, sanitizeHistory,
-  cleanName, defaultSettings,
+  cleanName, defaultSettings, THEMES,
 } from './model.js';
+
+/** テーマを画面に反映（色は styles.css の [data-theme] で切り替わる） */
+export function applyTheme(id) {
+  const t = THEMES.find((x) => x.id === id) || THEMES[0];
+  document.documentElement.dataset.theme = t.id;
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.setAttribute('content', t.color);
+}
 
 export const app = {
   store: null,
@@ -26,6 +34,7 @@ export async function initData() {
   const all = await app.store.loadAll();
   const metaMap = new Map(all.meta.map((m) => [m.key, m.value]));
   app.state.settings = sanitizeSettings(metaMap.get('settings'));
+  applyTheme(app.state.settings.theme);
   app.state.menus = all.menus.map((m, i) => sanitizeMenu(m, i)).filter(Boolean).sort(byOrder);
   app.state.exercises = all.exercises.map(sanitizeExercise).filter(Boolean);
   app.state.history = all.history.map(sanitizeHistory).filter(Boolean);
@@ -115,6 +124,7 @@ export const historyNewestFirst = () => [...app.state.history].sort((a, b) => Da
 // ---- 設定 ----
 export async function saveSettings(patch) {
   app.state.settings = sanitizeSettings({ ...app.state.settings, ...patch });
+  if ('theme' in patch) applyTheme(app.state.settings.theme);
   await app.store.put('meta', { key: 'settings', value: app.state.settings });
 }
 
@@ -125,6 +135,7 @@ export async function applyRestore(data) {
   app.state.exercises = data.exercises.slice();
   app.state.history = data.history.slice();
   app.state.settings = data.settings;
+  applyTheme(data.settings.theme);
 }
 
 // ---- Service Worker と安全なタイミングの自動更新 ----

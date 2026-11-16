@@ -1,7 +1,7 @@
 // ホーム・メニュー一覧・履歴・種目管理
 import { h, clear, mount, confirmDialog, toast, makeSortable, moveItem, segmented } from './dom.js';
 import { app, saveSettings, toggleFavorite, deleteMenu, reorderMenus, deleteHistory, clearHistory, historyNewestFirst, addExercise, removeExercise } from './core.js';
-import { gloveIcon } from './glove.js';
+import { themeIcon, THEME_TAGLINE } from './glove.js';
 import { pageHeader, menuSummary, menuDetail, fmtDateTime } from './ui.js';
 
 function detailBlock(m) {
@@ -25,7 +25,9 @@ export function renderHome(root) {
   const favs = menus.filter((m) => m.favorite);
   const recent = historyNewestFirst().slice(0, 3);
   mount(root, 
-    h('header', { class: 'home-head' }, gloveIcon(), h('div', null, h('h1', null, 'Fighting Timer'), h('p', { class: 'meta' }, 'キックボクシング用タイマー'))),
+    h('header', { class: 'home-head' + (app.state.settings.theme === 'normal' ? '' : ' themed') },
+      themeIcon(app.state.settings.theme),
+      h('div', null, h('h1', null, 'Fighting Timer'), h('p', { class: 'meta' }, THEME_TAGLINE[app.state.settings.theme] || ''))),
     menus.length === 0
       ? h('section', { class: 'card hero' },
         h('h2', null, 'はじめましょう'),

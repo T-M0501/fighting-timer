@@ -41,6 +41,18 @@ h1, h2, p { margin: 0; }
 
 .home-head { padding: 14px 2px 6px; display: flex; align-items: center; gap: 12px; }
 .glove { width: 64px; height: 64px; flex: none; }
+.home-head.themed { background: var(--hero-bg); color: var(--hero-fg); border-radius: 16px; padding: 14px 16px; margin-bottom: 6px; border-bottom: 4px solid var(--hero-accent); }
+.home-head.themed h1 { color: var(--hero-fg); letter-spacing: .04em; }
+.home-head.themed .meta { color: var(--hero-accent); font-weight: 700; letter-spacing: .12em; }
+.theme-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-bottom: 8px; }
+.theme-btn { display: flex; align-items: center; gap: 8px; text-align: left; padding: 8px 10px; font-size: 14px; }
+.theme-btn.on { border: 2px solid var(--primary); background: #fff; box-shadow: 0 0 0 2px rgba(0,0,0,.05); }
+.theme-ico { width: 32px; height: 32px; flex: none; }
+.theme-ico.swatch { border-radius: 8px; }
+:root[data-theme="kickboxing"] { --primary: #c92a2a; --primary-d: #a51f1f; --hero-bg: #1f2328; --hero-fg: #fff; --hero-accent: #ff8787; --bg: #f3f3f4; }
+:root[data-theme="boxing"] { --primary: #1d4f91; --primary-d: #163d72; --hero-bg: #101c33; --hero-fg: #fff; --hero-accent: #d4af37; --bg: #f2f4f8; }
+:root[data-theme="judo"] { --primary: #34478f; --primary-d: #263670; --hero-bg: #172036; --hero-fg: #fff; --hero-accent: #ced4da; --bg: #f3f4f8; }
+:root[data-theme="karate"] { --primary: #2b2d31; --primary-d: #000; --hero-bg: #16181b; --hero-fg: #fff; --hero-accent: #e8554d; --bg: #f4f4f3; }
 .home-head h1 { font-size: 28px; color: var(--primary); letter-spacing: .02em; }
 .page-head { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 8px; padding: 4px 0 10px; position: sticky; top: 0; background: var(--bg); z-index: 5; }
 .page-head h1 { font-size: 17px; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

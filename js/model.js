@@ -10,6 +10,13 @@ export const LIMITS = Object.freeze({
 export const BACKUP_FORMAT = 'FightingTimerBackup';
 export const BACKUP_VERSION = 1;
 export const COUNTDOWN_CHOICES = [0, 3, 5, 10];
+export const THEMES = [
+  { id: 'normal', label: '通常', color: '#e8590c' },
+  { id: 'kickboxing', label: 'キックボクシング', color: '#c92a2a' },
+  { id: 'boxing', label: 'ボクシング', color: '#1d4f91' },
+  { id: 'judo', label: '柔道', color: '#34478f' },
+  { id: 'karate', label: '空手', color: '#2b2d31' },
+];
 
 export const DEFAULT_EXERCISE_NAMES = [
   'スクワット', '腕立て伏せ', 'プランク', '腹筋', '背筋',
@@ -105,7 +112,7 @@ export function sanitizeHistory(raw) {
 }
 
 export function defaultSettings() {
-  return { beepOn: true, voiceOn: true, volume: 80, countdown: 3, notify: false, keepAwake: true, menuView: 'simple' };
+  return { beepOn: true, voiceOn: true, volume: 80, countdown: 3, notify: false, keepAwake: true, menuView: 'simple', theme: 'kickboxing' };
 }
 
 export function sanitizeSettings(raw) {
@@ -120,6 +127,7 @@ export function sanitizeSettings(raw) {
     notify: typeof raw.notify === 'boolean' ? raw.notify : d.notify,
     keepAwake: typeof raw.keepAwake === 'boolean' ? raw.keepAwake : d.keepAwake,
     menuView: raw.menuView === 'detail' ? 'detail' : 'simple',
+    theme: THEMES.some((t) => t.id === raw.theme) ? raw.theme : d.theme,
   };
 }
 

@@ -1,7 +1,8 @@
 // 設定画面（音・試聴・バックアップ・復元・更新確認）
 import { h, mount, confirmDialog, alertDialog, toast } from './dom.js';
 import { app, saveSettings, applyRestore, hasPendingUpdate, tryApplyUpdate } from './core.js';
-import { buildBackup, validateBackup, COUNTDOWN_CHOICES } from './model.js';
+import { buildBackup, validateBackup, COUNTDOWN_CHOICES, THEMES } from './model.js';
+import { themeIcon } from './glove.js';
 import { pageHeader } from './ui.js';
 import { APP_VERSION } from './version.js';
 
@@ -91,6 +92,14 @@ export function renderSettings(root) {
   mount(root, 
     pageHeader('設定', '#/'),
     !app.persistent ? h('div', { class: 'card warn' }, 'この環境ではデータを保存できません（ブラウザの保存機能が使えません）。バックアップをこまめに保存してください。') : null,
+    h('section', { class: 'card' },
+      h('h2', { class: 'sec in' }, 'デザイン（テーマ）'),
+      h('div', { class: 'theme-grid', role: 'group', 'aria-label': 'テーマ' }, THEMES.map((t) => h('button', {
+        class: 'btn theme-btn' + (t.id === st.theme ? ' on' : ''),
+        'aria-pressed': t.id === st.theme ? 'true' : 'false',
+        onClick: async () => { await saveSettings({ theme: t.id }); app.go('#/settings'); },
+      }, themeIcon(t.id, 'theme-ico') || h('span', { class: 'theme-ico swatch', style: { background: t.color } }), h('span', null, t.label)))),
+      h('p', { class: 'meta' }, '色と、トップ画面のイラストが変わります。タイマー画面の色(準備=黄・運動=緑・休憩=青)は変わりません。')),
     h('section', { class: 'card' },
       h('h2', { class: 'sec in' }, '音'),
       toggleRow('電子音', '切り替え・カウントダウンの音', st.beepOn, (v) => saveSettings({ beepOn: v })),
