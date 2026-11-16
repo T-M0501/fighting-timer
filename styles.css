@@ -92,15 +92,25 @@ h1, h2, p { margin: 0; }
 .ovr-chk input { width: 22px; height: 22px; accent-color: var(--primary); flex: none; }
 .warn-text { color: var(--danger); font-weight: 700; }
 .flow-box summary { min-height: 44px; display: flex; align-items: center; font-weight: 700; cursor: pointer; }
-.flow-list { margin: 2px 0 0; padding: 0; list-style: none; font-size: 13px; line-height: 1.35; }
-.flow-list li { display: flex; justify-content: space-between; gap: 8px; padding: 5px 0; border-top: 1px solid #eef0f2; }
-.flow-list li:first-child { border-top: 0; }
-.flow-time { flex: none; font-weight: 700; white-space: nowrap; }
-.flow-list li.flow-rest { color: var(--muted); padding: 1px 0 1px 12px; border-top: 0; font-size: 12px; }
-.flow-list li.flow-rest .flow-time { font-weight: 400; }
-.flow-list li.flow-loop { color: var(--muted); }
-.flow-list li.flow-total { font-size: 14px; border-top: 2px solid var(--line); margin-top: 3px; }
-.flow-list li.flow-prep, .flow-list li.flow-note { color: var(--muted); }
+.flow-box .seg { margin: 4px 0 8px; }
+.flow-box .seg-btn { min-height: 40px; font-size: 13px; }
+.tl { margin: 0; padding: 0; list-style: none; font-size: 13px; line-height: 1.35; }
+.tl-row { display: flex; align-items: baseline; gap: 8px; padding: 6px 0; border-top: 1px solid #eef0f2; }
+.tl > li:first-child, .tl > li:first-child .tl-row { border-top: 0; }
+.tl-at { flex: none; width: 44px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.tl-text { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.tl-dur { flex: none; font-weight: 700; white-space: nowrap; }
+.tl-prep, .tl-rest { color: var(--muted); }
+.tl-rest .tl-dur, .tl-prep .tl-dur { font-weight: 400; }
+.tl-end { font-weight: 700; border-top: 2px solid var(--line); }
+.tl-group summary { cursor: pointer; min-height: 40px; align-items: center; list-style: none; }
+.tl-group summary::-webkit-details-marker { display: none; }
+.tl-group summary .tl-dur::after { content: ' ▾'; color: var(--muted); font-weight: 400; }
+.tl-group details[open] summary .tl-dur::after { content: ' ▴'; }
+.tl-sub { margin: 0 0 6px 10px; padding-left: 8px; border-left: 3px solid var(--line); font-size: 12px; }
+.tl-sub .tl-row { padding: 3px 0; border-top: 0; }
+.tl-sub .tl-work .tl-dur { font-weight: 400; }
+.tl-btn { min-height: 40px; font-size: 13px; margin-top: 6px; }
 .view-toggle { margin-bottom: 12px; }
 .detail { margin-top: 8px; padding: 8px 10px; background: #f8f9fa; border-radius: 10px; font-size: 14px; }
 .detail-settings { color: var(--muted); margin-bottom: 4px; }

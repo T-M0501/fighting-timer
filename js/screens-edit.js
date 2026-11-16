@@ -2,8 +2,8 @@
 import { h, clear, mount, confirmDialog, openModal, toast, timeField, numberField, segmented, makeSortable, moveItem } from './dom.js';
 import { app, saveMenu, addExercise } from './core.js';
 import { buildPlan } from './engine.js';
-import { defaultMenu, newItem, LIMITS, formatDuration } from './model.js';
-import { pageHeader, flowLines } from './ui.js';
+import { defaultMenu, newItem, LIMITS, formatDuration, formatClock } from './model.js';
+import { pageHeader, flowTimeline } from './ui.js';
 
 export function renderEditor(root, id) {
   const isNew = id === 'new';
@@ -29,16 +29,65 @@ export function renderEditor(root, id) {
   const totalEl = h('div', { class: 'total-box' });
 
   const flowBox = h('details', { class: 'card flow-box' }, h('summary', null, 'このメニューの流れを確認する'));
-  const flowList = h('ol', { class: 'flow-list' });
-  flowBox.append(flowList);
+  const flowBody = h('div');
+  flowBox.append(flowBody);
+  const FLOW_LIMIT = 8; // これより行が多いときは折りたたむ
+  let flowMode = 'simple'; // simple=種目ごと / detail=1セットごと
+  let flowAll = false; // 折りたたんだ続きを表示しているか
+  let openKeys = null; // 詳細表示で開いている種目(周回)
+
+  function drawFlow() {
+    clear(flowBody);
+    const { rows, totalSec } = flowTimeline(draft);
+    const groups = rows.filter((r) => r.type === 'group');
+    if (!groups.length) {
+      flowBody.append(h('p', { class: 'meta' }, '種目を追加すると、ここに流れが表示されます。'));
+      return;
+    }
+    if (!openKeys) openKeys = new Set([groups[0].key]);
+    const detail = flowMode === 'detail';
+    const allOpen = groups.every((g) => openKeys.has(g.key));
+    const line = (r) => [
+      h('span', { class: 'tl-at' }, formatClock(r.at)),
+      h('span', { class: 'tl-text' }, r.name ? h('b', null, r.name) : null, r.name ? ' ' : null, r.text),
+      r.dur != null ? h('span', { class: 'tl-dur' }, formatDuration(r.dur)) : null];
+    const list = h('ol', { class: 'tl' });
+    const shown = flowAll ? rows : rows.slice(0, FLOW_LIMIT);
+    for (const r of shown) {
+      if (detail && r.type === 'group') {
+        list.append(h('li', { class: 'tl-group' }, h('details', {
+          open: openKeys.has(r.key),
+          onToggle: (e) => { if (e.target.open) openKeys.add(r.key); else openKeys.delete(r.key); },
+        },
+        h('summary', { class: 'tl-row' }, line(r)),
+        h('ol', { class: 'tl tl-sub' }, r.children.map((c) => h('li', { class: 'tl-row tl-' + c.type }, line(c)))))));
+      } else {
+        list.append(h('li', { class: 'tl-row tl-' + r.type }, line(r)));
+      }
+    }
+    const hidden = rows.length - shown.length;
+    if (!hidden) list.append(h('li', { class: 'tl-row tl-end' }, line({ at: totalSec, text: '終了' })));
+    mount(flowBody,
+      segmented({
+        label: '流れの表示', value: flowMode,
+        options: draft.repeatMode === 'circuit'
+          ? [{ value: 'simple', label: '簡易（周回ごと）' }, { value: 'detail', label: '詳細（種目ごと）' }]
+          : [{ value: 'simple', label: '簡易（種目ごと）' }, { value: 'detail', label: '詳細（1セットごと）' }],
+        onChange: (v) => { flowMode = v; drawFlow(); },
+      }),
+      detail ? h('button', {
+        class: 'btn btn-ghost tl-btn',
+        onClick: () => { openKeys = new Set(allOpen ? [] : groups.map((g) => g.key)); drawFlow(); },
+      }, allOpen ? 'すべて閉じる' : 'すべて開く') : null,
+      list,
+      rows.length > FLOW_LIMIT ? h('button', {
+        class: 'btn btn-block tl-btn',
+        onClick: () => { flowAll = !flowAll; drawFlow(); },
+      }, flowAll ? '折りたたむ' : `続きを表示（あと${hidden}行）`) : null);
+  }
 
   const updateTotal = () => {
-    clear(flowList);
-    for (const row of flowLines(draft)) {
-      flowList.append(h('li', { class: 'flow-' + row.type },
-        h('span', { class: 'flow-text' }, row.name ? h('b', null, row.name) : null, row.name ? ' ' : null, row.text),
-        row.time ? h('span', { class: 'flow-time' }, row.time) : null));
-    }
+    drawFlow();
     const plan = buildPlan({ ...draft, laps: draft.laps });
     clear(totalEl);
     totalEl.append(
@@ -74,7 +123,7 @@ export function renderEditor(root, id) {
         segmented({
           label: '進め方', value: draft.repeatMode,
           options: [{ value: 'exercise', label: '1種目ずつ' }, { value: 'circuit', label: 'サーキット' }],
-          onChange: (v) => { draft.repeatMode = v; build(); },
+          onChange: (v) => { draft.repeatMode = v; openKeys = null; flowAll = false; build(); },
         }),
         h('p', { class: 'meta' }, circuit
           ? 'サーキット：種目を順番に1回ずつ行い、最後の種目まで終わったら最初に戻ります。これを「周回数」の分だけ繰り返します。'
