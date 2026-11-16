@@ -13,6 +13,31 @@ function toggleRow(label, desc, checked, onChange) {
     h('span', { class: 'switch' }, input, h('span', { class: 'slider' })));
 }
 
+/** アプリの公開URL（index.html や #以降を除いた形） */
+function shareUrl() {
+  return new URL('./', location.href).href;
+}
+
+async function copyUrl() {
+  const url = shareUrl();
+  try {
+    await navigator.clipboard.writeText(url);
+    toast('URLをコピーしました');
+    return;
+  } catch { /* 下の方法に切り替える */ }
+  try {
+    const ta = h('textarea', { style: { position: 'fixed', opacity: '0' } });
+    ta.value = url;
+    document.body.append(ta);
+    ta.select();
+    const ok = document.execCommand('copy');
+    ta.remove();
+    toast(ok ? 'URLをコピーしました' : 'コピーできませんでした。URLを長押ししてコピーしてください');
+  } catch {
+    toast('コピーできませんでした。URLを長押ししてコピーしてください');
+  }
+}
+
 function backupFileName() {
   const d = new Date();
   const p = (n) => String(n).padStart(2, '0');
@@ -135,6 +160,13 @@ export function renderSettings(root) {
       h('button', { class: 'btn btn-block', onClick: () => fileInput.click() }, 'バックアップから復元'),
       fileInput,
       h('p', { class: 'meta' }, 'メニュー・登録種目・履歴・設定を1つのファイルにまとめて保存します。iPhoneでは「ファイルに保存」やiCloud Driveを選べます。')),
+    h('section', { class: 'card' },
+      h('h2', { class: 'sec in' }, 'アプリのURL（共有用）'),
+      h('input', { type: 'text', class: 'text url-box', readonly: true, value: shareUrl(), 'aria-label': '共有用URL', onFocus: (e) => e.target.select() }),
+      h('div', { class: 'row-actions wrap' },
+        h('button', { class: 'btn btn-primary', onClick: copyUrl }, 'URLをコピー'),
+        navigator.share ? h('button', { class: 'btn', onClick: () => navigator.share({ title: 'Fighting Timer', url: shareUrl() }).catch(() => {}) }, '共有する') : null),
+      h('p', { class: 'meta' }, '家族や友人にこのURLを送ると、同じアプリを使ってもらえます（保存したデータは共有されません）。')),
     h('section', { class: 'card' },
       h('h2', { class: 'sec in' }, 'アプリ情報'),
       h('p', { class: 'meta' }, `バージョン：${APP_VERSION}`),
