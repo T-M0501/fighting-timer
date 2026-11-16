@@ -34,7 +34,11 @@ export function renderEditor(root, id) {
 
   const updateTotal = () => {
     clear(flowList);
-    for (const line of flowLines(draft)) flowList.append(h('li', { class: line.startsWith('↓') ? 'flow-rest' : '' }, line));
+    for (const row of flowLines(draft)) {
+      flowList.append(h('li', { class: 'flow-' + row.type },
+        h('span', { class: 'flow-text' }, row.name ? h('b', null, row.name) : null, row.name ? ' ' : null, row.text),
+        row.time ? h('span', { class: 'flow-time' }, row.time) : null));
+    }
     const plan = buildPlan({ ...draft, laps: draft.laps });
     clear(totalEl);
     totalEl.append(
@@ -74,7 +78,7 @@ export function renderEditor(root, id) {
         }),
         h('p', { class: 'meta' }, circuit
           ? 'サーキット：全種目を1回ずつ順番に行い、それを「周回数」だけ繰り返します。'
-          : '1種目ずつ：1つの種目の「セット」をすべて終えてから、次の種目へ進みます。種目ごとに「サイクル」（セットのかたまりの繰り返し）も設定できます。'),
+          : '1種目ずつ：1つの種目の「セット」をすべて終えてから、次の種目へ進みます。種目ごとに「サイクル」（同じ内容を繰り返す）も設定できます。'),
         circuit ? numberField({
           label: '周回数（全種目を何周するか）', value: draft.laps, min: 1, max: LIMITS.MAX_LAPS, steps: [-1, 1], format: (v) => `${v}周`,
           onChange: (v) => { draft.laps = v; updateTotal(); },
@@ -82,7 +86,7 @@ export function renderEditor(root, id) {
       h('section', { class: 'card' },
         h('div', { class: 'fld-label' }, '③ 準備と休憩'),
         timeField({ label: '準備時間（最初の運動の前。0秒なら すぐ開始）', value: draft.prepSec, min: 0, max: T, onChange: (v) => { draft.prepSec = v; updateTotal(); } }),
-        circuit ? null : timeField({ label: 'セット間の休憩（運動と運動のあいだ）', value: draft.setRestSec, min: 0, max: T, onChange: (v) => { draft.setRestSec = v; updateTotal(); } }),
+        circuit ? null : timeField({ label: 'セット間の休憩（設定したセット数間での休憩時間）', value: draft.setRestSec, min: 0, max: T, onChange: (v) => { draft.setRestSec = v; updateTotal(); } }),
         circuit ? null : timeField({
           label: 'サイクル間の休憩（サイクルが終わって、次のサイクルに入る前）', value: draft.circuitRestSec, min: 0, max: T,
           onChange: (v) => { draft.circuitRestSec = v; updateTotal(); },

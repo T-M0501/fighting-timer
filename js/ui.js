@@ -23,35 +23,54 @@ export function menuSummary(menu) {
   return `${mode} ・ ${menu.items.length}種目 ・ 合計 ${total ? formatDuration(total) : '—'}`;
 }
 
-/** 編集画面用: このメニューがどう進むかを日本語で説明（'↓'で始まる行は休憩） */
+/**
+ * 編集画面用: このメニューがどう進むかの説明。行は { type, name?, text, time? }
+ * type: prep(準備) / item(種目) / rest(休憩) / loop(周回の説明) / total(合計) / note
+ */
 export function flowLines(menu) {
   const d = formatDuration;
   const items = menu.items || [];
-  if (!items.length) return ['種目を追加すると、ここに流れが表示されます。'];
+  if (!items.length) return [{ type: 'note', text: '種目を追加すると、ここに流れが表示されます。' }];
   const pick = (v, def) => (v === null || v === undefined ? def : v);
-  const rest = (sec) => (sec > 0 ? `↓ 休憩 ${d(sec)}` : null);
-  const lines = [];
-  if (menu.prepSec > 0) lines.push(`準備 ${d(menu.prepSec)}`);
   const work = (it) => (menu.timeMode === 'individual' ? it.workSec : menu.commonWorkSec);
+  const rows = [];
+  if (menu.prepSec > 0) rows.push({ type: 'prep', text: '準備', time: d(menu.prepSec) });
   if (menu.repeatMode === 'circuit') {
-    for (let i = 0; i < items.length; i++) {
-      lines.push(`${items[i].name}（運動 ${d(work(items[i]))}）`);
-      if (i < items.length - 1) { const r = rest(menu.exerciseRestSec); if (r) lines.push(r); }
-    }
-    lines.push(`↑ ここまでを ${menu.laps}周 くり返します` + (menu.circuitRestSec > 0 ? `（周回の間は休憩 ${d(menu.circuitRestSec)}）` : ''));
-    return lines;
+    let lapSec = 0;
+    items.forEach((it, i) => {
+      rows.push({ type: 'item', name: `${i + 1}. ${it.name}`, text: `運動 ${d(work(it))}`, time: d(work(it)) });
+      lapSec += work(it);
+      if (i < items.length - 1) {
+        lapSec += menu.exerciseRestSec;
+        if (menu.exerciseRestSec > 0) rows.push({ type: 'rest', text: `↓ 種目間 休憩 ${d(menu.exerciseRestSec)}` });
+      }
+    });
+    rows.push({
+      type: 'loop',
+      text: `↑ 以上を ${menu.laps}周（周回間 ${menu.circuitRestSec > 0 ? '休憩 ' + d(menu.circuitRestSec) : '休憩なし'}）`,
+      time: `1周 ${d(lapSec)}`,
+    });
+  } else {
+    items.forEach((it, i) => {
+      const w = work(it);
+      const sets = it.sets;
+      const cycles = it.cycles || 1;
+      const setRest = pick(it.setRestSec, menu.setRestSec);
+      const cycleRest = pick(it.cycleRestSec, menu.circuitRestSec);
+      let text = `運動 ${d(w)} × ${sets}セット`;
+      if (sets > 1) text += `（セット間 ${setRest > 0 ? '休憩 ' + d(setRest) : '休憩なし'}）`;
+      if (cycles > 1) text += ` × ${cycles}サイクル（サイクル間 ${cycleRest > 0 ? '休憩 ' + d(cycleRest) : '休憩なし'}）`;
+      const oneCycle = sets * w + (sets - 1) * setRest;
+      const sec = cycles * oneCycle + (cycles - 1) * cycleRest;
+      rows.push({ type: 'item', name: `${i + 1}. ${it.name}`, text, time: d(sec) });
+      if (i < items.length - 1) {
+        const r = pick(it.restAfterSec, menu.exerciseRestSec);
+        if (r > 0) rows.push({ type: 'rest', text: `↓ 種目間 休憩 ${d(r)}${it.restAfterSec != null ? '（この種目だけ変更）' : ''}` });
+      }
+    });
   }
-  items.forEach((it, i) => {
-    const setRest = pick(it.setRestSec, menu.setRestSec);
-    const cycleRest = pick(it.cycleRestSec, menu.circuitRestSec);
-    const cycles = it.cycles || 1;
-    let s = `${it.name}：運動 ${d(work(it))} を ${it.sets}セット`;
-    if (it.sets > 1) s += setRest > 0 ? `（セットの間は休憩 ${d(setRest)}）` : '（セットの間は休憩なし）';
-    if (cycles > 1) s += ` → これを ${cycles}サイクル` + (cycleRest > 0 ? `（サイクルの間は休憩 ${d(cycleRest)}）` : '（サイクルの間は休憩なし）');
-    lines.push(s);
-    if (i < items.length - 1) { const r = rest(pick(it.restAfterSec, menu.exerciseRestSec)); if (r) lines.push(r); }
-  });
-  return lines;
+  rows.push({ type: 'total', text: '合計', time: d(buildPlan(menu).totalSec) });
+  return rows;
 }
 
 /** 詳細表示用: 設定の要約と種目一覧 */
