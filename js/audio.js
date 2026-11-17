@@ -53,7 +53,8 @@ export class AudioEngine {
           this.master.connect(this.ctx.destination);
           this.input = comp;
           // iPhoneでは読み上げや着信などで音が止められる(interrupted)ことがある。止められたら自分で再開する。
-          this.ctx.addEventListener('statechange', () => this._wake());
+          // ただし読み上げの最中は再開しない（声を途中で止めてしまうおそれがあるため。読み上げが終われば再開する）
+          this.ctx.addEventListener('statechange', () => { if (!this.utter) this._wake(); });
           document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') this._wake(); });
         }
       }
@@ -71,6 +72,35 @@ export class AudioEngine {
     try {
       if (this.ctx && this.ctx.state !== 'running' && this.ctx.state !== 'closed') this.ctx.resume().catch(() => {});
     } catch { /* ignore */ }
+  }
+
+  /**
+   * 読み上げの間だけ、耳に聞こえないごく小さな低い音を流し続ける。
+   * iPhoneでは、電子音が鳴っている間しか読み上げの声が出ない(電子音が止むと声も途切れる)現象があるための対策。
+   */
+  _keepAlive(on) {
+    clearTimeout(this.kaTimer);
+    try {
+      if (on && this.keepAliveOn !== false) {
+        if (this.ka || !this.ctx || this.ctx.state !== 'running') return;
+        const osc = this.ctx.createOscillator();
+        osc.type = 'sine';
+        osc.frequency.value = 40;
+        const g = this.ctx.createGain();
+        g.gain.value = 0.001;
+        osc.connect(g);
+        g.connect(this.ctx.destination);
+        osc.start();
+        this.ka = { osc, g };
+        this.kaTimer = setTimeout(() => this._keepAlive(false), 12000); // 終了の合図が来ない端末のための保険
+      } else if (this.ka) {
+        const { osc, g } = this.ka;
+        this.ka = null;
+        osc.stop();
+        osc.disconnect();
+        g.disconnect();
+      }
+    } catch { this.ka = null; }
   }
 
   /** タップの中で無音の読み上げをして、あとから(時間差で)声を出せるようにする。すぐ後に speak() を呼ぶ場合は不要 */
@@ -219,9 +249,11 @@ export class AudioEngine {
       const log = { text, voice: voice ? voice.name : '端末の標準', started: false, ended: false, error: '' };
       this.lastSpeech = log; // 設定画面のテストで表示する診断用
       u.onstart = () => { log.started = true; };
-      u.onend = () => { log.ended = true; if (this.utter === u) this.utter = null; this._wake(); };
-      u.onerror = (e) => { log.error = String((e && e.error) || '不明'); if (this.utter === u) this.utter = null; this._wake(); };
+      const done = () => { if (this.utter === u) { this.utter = null; this._keepAlive(false); } this._wake(); };
+      u.onend = () => { log.ended = true; done(); };
+      u.onerror = (e) => { log.error = String((e && e.error) || '不明'); done(); };
       this.utter = u;
+      this._keepAlive(true);
       s.speak(u);
     } catch (e) {
       console.warn('音声読み上げ失敗', e);
@@ -230,6 +262,8 @@ export class AudioEngine {
 
   cancelSpeech() {
     clearTimeout(this.speakTimer);
+    this.utter = null;
+    this._keepAlive(false);
     try { globalThis.speechSynthesis?.cancel(); } catch { /* ignore */ }
   }
 }

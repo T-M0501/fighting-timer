@@ -103,6 +103,53 @@ async function importBackup(file) {
   app.go('#/');
 }
 
+/** 音声ガイドが出ない端末で、原因を切り分けるための診断画面 */
+export function renderVoiceTest(root) {
+  const TEXT = '運動開始。次はスクワット';
+  const a = app.audio;
+  const out = h('ol', { class: 'meta' });
+  const add = (label) => { const li = h('li', null, label + '：実行中…'); out.append(li); return li; };
+  // アプリの読み上げ処理を通さず、端末の読み上げ機能をそのまま呼ぶ
+  const bare = (label) => {
+    const li = add(label);
+    const r = { started: false, ended: false, error: '' };
+    try {
+      const u = new SpeechSynthesisUtterance(TEXT);
+      u.lang = 'ja-JP';
+      u.onstart = () => { r.started = true; };
+      u.onend = () => { r.ended = true; };
+      u.onerror = (e) => { r.error = String((e && e.error) || '不明'); };
+      window.__ftUtter = u;
+      speechSynthesis.speak(u);
+    } catch (e) { r.error = String(e); }
+    setTimeout(() => { li.textContent = `${label}：開始${r.started ? '○' : '×'}／終了${r.ended ? '○' : '×'}／エラー${r.error || 'なし'}／音${a.ctx ? a.ctx.state : '未使用'}`; }, 6000);
+  };
+  const viaApp = (label, keep) => {
+    const li = add(label);
+    a.keepAliveOn = keep;
+    a.unlock();
+    a.speak(TEXT, { force: true });
+    setTimeout(() => {
+      const r = a.lastSpeech || {};
+      a.keepAliveOn = true;
+      li.textContent = `${label}：開始${r.started ? '○' : '×'}／終了${r.ended ? '○' : '×'}／エラー${r.error || 'なし'}／音${a.ctx ? a.ctx.state : '未使用'}／声${r.voice || '?'}`;
+    }, 6000);
+  };
+  let n = -1;
+  try { n = speechSynthesis.getVoices().filter((v) => /^ja/i.test(v.lang)).length; } catch { /* 非対応 */ }
+  mount(root,
+    pageHeader('音声ガイドの診断', '#/settings'),
+    h('section', { class: 'card' },
+      h('p', null, '音声ガイドが聞こえないときの原因を調べる画面です。'),
+      h('p', { class: 'meta' }, '① アプリ（またはブラウザのタブ）を一度完全に閉じて開き直し、ほかのボタンを押さずにこの画面を開いてください。② 下のA・B・Cを上から順に、1つ押したら6秒ほど待ってから次を押してください。どれも「運動開始。次はスクワット」と話します。③ 最後まで聞こえたものはどれか（A・B・C）と、下に出る結果の文字を開発者に伝えてください。'),
+      h('div', { class: 'row-actions wrap' },
+        h('button', { class: 'btn', onClick: () => bare('A') }, 'A：声だけ'),
+        h('button', { class: 'btn', onClick: () => viaApp('B', false) }, 'B：電子音の準備あり'),
+        h('button', { class: 'btn', onClick: () => viaApp('C', true) }, 'C：新しい方式')),
+      out,
+      h('p', { class: 'meta' }, `日本語の声：${n}個 ／ 版：${APP_VERSION}`)));
+}
+
 export function renderSettings(root) {
   const st = app.state.settings;
   const volVal = h('span', { class: 'vol-val' }, `${st.volume}%`);
@@ -212,6 +259,7 @@ export function renderSettings(root) {
         h('button', { class: 'btn', onClick: () => { app.audio.unlock(); app.audio.beep('finish', { force: true }); } }, '終了メロディー')),
       h('button', { class: 'btn btn-block', onClick: flowTest }, 'タイマーと同じ流れで試す（約10秒）'),
       flowTestMsg,
+      h('button', { class: 'btn btn-ghost btn-block', onClick: () => app.go('#/voicetest') }, '音声ガイドが出ないとき（診断）'),
       h('p', { class: 'meta' }, '音が小さいときは、端末本体の音量を上げ、マナーモード（消音）になっていないか確認してください。このアプリは、端末の最大音量より大きな音は出せません。')),
     h('section', { class: 'card' },
       h('h2', { class: 'sec in' }, '画面'),
