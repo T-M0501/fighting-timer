@@ -84,34 +84,29 @@ export function flowTimeline(menu) {
   return { rows, totalSec: plan.totalSec };
 }
 
-/** 種目1つ分の内容を1行で表す（例: 20秒 + 休憩10秒 ・ 1セット）。編集画面とメニュー詳細で共通 */
-export function itemSummary(menu, it, isLast) {
+/** 種目1つ分の内容を1行で表す（例: 30秒 ・ 3セット（セット間の休憩15秒））。編集画面とメニュー詳細で共通 */
+export function itemSummary(menu, it) {
   const d = formatDuration;
   const pick = (v, def) => (v === null || v === undefined ? def : v);
+  const rest = (sec) => (sec ? d(sec) : 'なし');
   const work = d(menu.timeMode === 'individual' ? it.workSec : menu.commonWorkSec);
   if (menu.repeatMode === 'circuit') return work;
-  const rest = (sec) => (sec ? `休憩${d(sec)}` : '休憩なし');
-  const setRest = pick(it.setRestSec, menu.setRestSec);
-  const after = pick(it.restAfterSec, menu.exerciseRestSec);
-  const parts = [];
-  if (it.sets > 1) {
-    parts.push(`${work} + ${rest(setRest)}`, `${it.sets}セット`);
-    if (!isLast && after !== setRest) parts.push(`次の種目まで${rest(after)}`);
-  } else {
-    parts.push(isLast ? work : `${work} + ${rest(after)}`, '1セット');
-  }
-  if (it.cycles > 1) parts.push(`${it.cycles}サイクル（サイクル間${rest(pick(it.cycleRestSec, menu.circuitRestSec))}）`);
+  const parts = [work, it.sets > 1 ? `${it.sets}セット（セット間の休憩${rest(pick(it.setRestSec, menu.setRestSec))}）` : '1セット'];
+  if (it.cycles > 1) parts.push(`${it.cycles}サイクル（サイクル間の休憩${rest(pick(it.cycleRestSec, menu.circuitRestSec))}）`);
   return parts.join(' ・ ');
 }
 
 /** 詳細表示用: 設定の要約と種目一覧 */
 export function menuDetail(menu) {
   const d = formatDuration;
+  const circuit = menu.repeatMode === 'circuit';
   const settings = [`準備 ${menu.prepSec ? d(menu.prepSec) : 'なし'}`];
-  if (menu.repeatMode === 'circuit') {
-    settings.push(`${menu.laps}周`, `種目間休憩 ${d(menu.exerciseRestSec)}`, `周回間休憩 ${d(menu.circuitRestSec)}`);
-  }
-  const items = menu.items.map((it, i) => `${i + 1}. ${it.name}　${itemSummary(menu, it, i === menu.items.length - 1)}`);
+  if (circuit) settings.push(`${menu.laps}周`, `種目間休憩 ${d(menu.exerciseRestSec)}`, `周回間休憩 ${d(menu.circuitRestSec)}`);
+  const items = menu.items.map((it, i) => {
+    const after = it.restAfterSec === null || it.restAfterSec === undefined ? menu.exerciseRestSec : it.restAfterSec;
+    const gap = circuit || i === menu.items.length - 1 ? '' : ` → インターバル${after ? d(after) : 'なし'}`;
+    return `${i + 1}. ${it.name}　${itemSummary(menu, it)}${gap}`;
+  });
   return { settings, items };
 }
 

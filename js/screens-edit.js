@@ -118,11 +118,9 @@ export function renderEditor(root, id) {
   let openKey = null; // 開いている行（'prep' または種目のid）
   let modeOpen = false; // 「進め方」を開いているか
   const cycOpen = new Set(); // 「サイクル」を開いている種目
-  const split = new Set(); // セット間と「次の種目まで」の休憩を分けて決める種目
-  draft.items.forEach((it, i) => { if (it.sets > 1 && it.setRestSec !== it.restAfterSec && i < draft.items.length - 1) split.add(it.id); });
   let sumEls = [];
   const refreshSummaries = () => {
-    sumEls.forEach(([el, it], i) => { el.textContent = itemSummary(draft, it, i === sumEls.length - 1); });
+    for (const [el, it] of sumEls) el.textContent = itemSummary(draft, it);
   };
   const changed = () => { refreshSummaries(); updateTotal(); };
   const toggle = (key) => { openKey = openKey === key ? null : key; build(); };
@@ -134,7 +132,7 @@ export function renderEditor(root, id) {
       h('section', { class: 'card' }, h('label', { class: 'fld-label' }, 'メニュー名'), nameInput),
       h('section', null,
         h('h2', { class: 'sec' }, `種目（${draft.items.length}）`),
-        h('p', { class: 'meta it-help' }, circuit ? '行を押すと、運動時間を変えられます。' : '行を押すと、運動時間・休憩・セット数を変えられます。'),
+        h('p', { class: 'meta it-help' }, circuit ? '行を押すと、運動時間を変えられます。' : '行を押すと、運動時間・セット数を変えられます。種目の間の「インターバル」を押すと、次の種目までの休憩を変えられます。'),
         itemsList(),
         h('button', { class: 'btn btn-primary btn-lg btn-block', onClick: openPicker }, '＋ 種目を追加')),
       h('details', { class: 'card flow-box', open: circuit || modeOpen, onToggle: (e) => { modeOpen = e.target.open; } },
@@ -188,14 +186,20 @@ export function renderEditor(root, id) {
     const lastIdx = draft.items.length - 1;
     draft.items.forEach((it, i) => {
       const last = i === lastIdx;
-      const sumEl = h('div', { class: 'meta' }, itemSummary(draft, it, last));
+      const sumEl = h('div', { class: 'meta' }, itemSummary(draft, it));
       sumEls.push([sumEl, it]);
       const open = openKey === it.id;
       ul.append(h('li', { class: 'card item' + (open ? ' open' : ''), 'data-sortable': '' },
         rowHead(it.id, { no: i + 1, name: it.name, sumEl, handle: true }),
         open ? itemBody(it, i, last, circuit) : null));
+      if (!circuit && !last) ul.append(gapRow(it));
     });
     makeSortable(ul, { onReorder: reorder });
+    // ドラッグ中はインターバルの行を隠し、指を離したら並びを描き直す（インターバルは前の種目についていく）
+    ul.addEventListener('pointerdown', (e) => { if (e.target.closest('.drag-handle')) ul.classList.add('sorting'); });
+    const endDrag = () => { if (ul.classList.contains('sorting')) setTimeout(build, 0); };
+    ul.addEventListener('pointerup', endDrag);
+    ul.addEventListener('pointercancel', endDrag);
     return ul;
   }
 
@@ -204,28 +208,15 @@ export function renderEditor(root, id) {
     const body = h('div', { class: 'it-body' });
     body.append(timeField({ label: '運動時間', value: it.workSec, min: 1, max: T, onChange: (v) => { it.workSec = v; changed(); } }));
     if (!circuit) {
-      const multi = it.sets > 1;
-      if (multi && !last && split.has(it.id)) {
-        body.append(
-          timeField({ label: 'セット間の休憩（1セット終わるごと）', value: it.setRestSec, min: 0, max: T, onChange: (v) => { it.setRestSec = v; changed(); } }),
-          timeField({ label: '次の種目までの休憩', value: it.restAfterSec, min: 0, max: T, onChange: (v) => { it.restAfterSec = v; changed(); } }),
-          h('button', { class: 'btn btn-ghost it-link', onClick: () => { split.delete(it.id); it.restAfterSec = it.setRestSec; build(); } }, '休憩を1つにまとめる'));
-      } else if (last && !multi) {
-        body.append(h('p', { class: 'meta' }, '最後の種目なので、このあとの休憩はありません（運動が終わるとトレーニング終了です）。'));
-      } else {
-        body.append(timeField({
-          label: last ? '休憩（1セット終わるごと）' : multi ? '休憩（1セット終わるごと・次の種目まで）' : '休憩（次の種目まで）',
-          value: last ? it.setRestSec : it.restAfterSec, min: 0, max: T,
-          onChange: (v) => { it.setRestSec = v; if (!last) it.restAfterSec = v; changed(); },
-        }));
-        if (multi && !last) body.append(h('button', { class: 'btn btn-ghost it-link', onClick: () => { split.add(it.id); build(); } }, '次の種目までの休憩だけ別の長さにする'));
+      if (it.sets > 1) {
+        body.append(timeField({ label: 'セット間の休憩（1セット終わるごと）', value: it.setRestSec, min: 0, max: T, onChange: (v) => { it.setRestSec = v; changed(); } }));
       }
       body.append(numberField({
         label: 'セット数', value: it.sets, min: 1, max: LIMITS.MAX_SETS, steps: [-1, 1], format: (v) => `${v}セット`,
         onChange: (v) => {
           const was = it.sets > 1;
           it.sets = v;
-          if (was !== (v > 1)) build(); else changed(); // 1セット⇔2セット以上で休憩の欄が変わる
+          if (was !== (v > 1)) build(); else changed(); // 2セット以上のときだけ「セット間の休憩」の欄を出す
         },
       }));
       body.append(h('details', {
@@ -254,6 +245,23 @@ export function renderEditor(root, id) {
     return body;
   }
 
+  /** 種目と種目の間のインターバル（次の種目までの休憩）。押すとその場で時間を変えられる */
+  function gapRow(it) {
+    const key = 'gap:' + it.id;
+    const open = openKey === key;
+    const text = (v) => (v ? formatDuration(v) : 'なし');
+    const val = h('b', null, text(it.restAfterSec));
+    return h('li', { class: 'it-gap' + (open ? ' open' : '') },
+      h('div', {
+        class: 'it-gap-row', role: 'button', tabindex: '0', 'aria-expanded': open ? 'true' : 'false',
+        onClick: () => toggle(key),
+        onKeydown: (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(key); } },
+      }, h('span', { 'aria-hidden': 'true' }, '↓'), h('span', null, 'インターバル　', val), h('span', { class: 'it-chev', 'aria-hidden': 'true' }, open ? '▴' : '▾')),
+      open ? h('div', { class: 'it-body' },
+        timeField({ label: 'インターバル（次の種目までの休憩）', value: it.restAfterSec, min: 0, max: T, onChange: (v) => { it.restAfterSec = v; val.textContent = text(v); updateTotal(); } }),
+        h('div', { class: 'row-actions' }, h('button', { class: 'btn btn-primary', onClick: () => toggle(key) }, 'OK'))) : null);
+  }
+
   function reorder(from, to) {
     draft.items = moveItem(draft.items, from, to);
     build();
@@ -262,7 +270,6 @@ export function renderEditor(root, id) {
   function duplicate(i) {
     const src = draft.items[i];
     const copy = { ...src, id: newItem(src.name).id };
-    if (split.has(src.id)) split.add(copy.id);
     draft.items.splice(i + 1, 0, copy);
     openKey = copy.id;
     build();
@@ -278,7 +285,6 @@ export function renderEditor(root, id) {
     it.setRestSec = prev ? prev.setRestSec : draft.setRestSec;
     it.restAfterSec = prev ? prev.restAfterSec : draft.setRestSec;
     it.cycleRestSec = prev ? prev.cycleRestSec : draft.circuitRestSec;
-    if (prev && split.has(prev.id)) split.add(it.id);
     draft.items.push(it);
     openKey = null;
     build();
