@@ -84,30 +84,34 @@ export function flowTimeline(menu) {
   return { rows, totalSec: plan.totalSec };
 }
 
+/** 種目1つ分の内容を1行で表す（例: 20秒 + 休憩10秒 ・ 1セット）。編集画面とメニュー詳細で共通 */
+export function itemSummary(menu, it, isLast) {
+  const d = formatDuration;
+  const pick = (v, def) => (v === null || v === undefined ? def : v);
+  const work = d(menu.timeMode === 'individual' ? it.workSec : menu.commonWorkSec);
+  if (menu.repeatMode === 'circuit') return work;
+  const rest = (sec) => (sec ? `休憩${d(sec)}` : '休憩なし');
+  const setRest = pick(it.setRestSec, menu.setRestSec);
+  const after = pick(it.restAfterSec, menu.exerciseRestSec);
+  const parts = [];
+  if (it.sets > 1) {
+    parts.push(`${work} + ${rest(setRest)}`, `${it.sets}セット`);
+    if (!isLast && after !== setRest) parts.push(`次の種目まで${rest(after)}`);
+  } else {
+    parts.push(isLast ? work : `${work} + ${rest(after)}`, '1セット');
+  }
+  if (it.cycles > 1) parts.push(`${it.cycles}サイクル（サイクル間${rest(pick(it.cycleRestSec, menu.circuitRestSec))}）`);
+  return parts.join(' ・ ');
+}
+
 /** 詳細表示用: 設定の要約と種目一覧 */
 export function menuDetail(menu) {
   const d = formatDuration;
-  const settings = [];
-  if (menu.timeMode === 'common') settings.push(`運動 ${d(menu.commonWorkSec)}`);
-  settings.push(`準備 ${menu.prepSec ? d(menu.prepSec) : 'なし'}`);
+  const settings = [`準備 ${menu.prepSec ? d(menu.prepSec) : 'なし'}`];
   if (menu.repeatMode === 'circuit') {
     settings.push(`${menu.laps}周`, `種目間休憩 ${d(menu.exerciseRestSec)}`, `周回間休憩 ${d(menu.circuitRestSec)}`);
-  } else {
-    settings.push(`セット間休憩 ${d(menu.setRestSec)}`, `種目間休憩 ${d(menu.exerciseRestSec)}`);
   }
-  const items = menu.items.map((it, i) => {
-    const parts = [];
-    const extra = [];
-    if (menu.timeMode === 'individual') parts.push(d(it.workSec));
-    if (menu.repeatMode !== 'circuit') {
-      parts.push(`${it.sets}セット`);
-      if (it.cycles > 1) parts.push(`${it.cycles}サイクル`);
-      if (it.setRestSec != null) extra.push(`セット間休憩${d(it.setRestSec)}`);
-      if (it.cycleRestSec != null && it.cycles > 1) extra.push(`サイクル間休憩${d(it.cycleRestSec)}`);
-      if (it.restAfterSec != null) extra.push(`この種目のあとの休憩${d(it.restAfterSec)}`);
-    }
-    return `${i + 1}. ${it.name}${parts.length ? '　' + parts.join(' × ') : ''}${extra.length ? '（' + extra.join('、') + '）' : ''}`;
-  });
+  const items = menu.items.map((it, i) => `${i + 1}. ${it.name}　${itemSummary(menu, it, i === menu.items.length - 1)}`);
   return { settings, items };
 }
 

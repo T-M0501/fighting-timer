@@ -1,9 +1,10 @@
 // メニュー作成・編集画面。「保存」を押したときだけ内容を確定する。
+// 種目を上から並べるだけのシンプルな一覧で、行を押すとその場で開いて編集できる。
 import { h, clear, mount, confirmDialog, openModal, toast, timeField, numberField, segmented, makeSortable, moveItem } from './dom.js';
 import { app, saveMenu, addExercise } from './core.js';
 import { buildPlan } from './engine.js';
 import { defaultMenu, newItem, LIMITS, formatDuration, formatClock } from './model.js';
-import { pageHeader, flowTimeline } from './ui.js';
+import { pageHeader, flowTimeline, itemSummary } from './ui.js';
 
 export function renderEditor(root, id) {
   const isNew = id === 'new';
@@ -13,7 +14,19 @@ export function renderEditor(root, id) {
     return;
   }
   const draft = structuredClone(found);
-  let snapshot = JSON.stringify(draft);
+
+  // 時間と休憩はすべて種目ごとに持たせる。
+  // 以前の「全種目で同じ運動時間」「メニュー共通の休憩」は各種目の値に展開する（タイマーの進み方は変わらない）。
+  if (draft.timeMode !== 'individual') {
+    for (const it of draft.items) it.workSec = draft.commonWorkSec;
+    draft.timeMode = 'individual';
+  }
+  for (const it of draft.items) {
+    if (it.setRestSec == null) it.setRestSec = draft.setRestSec;
+    if (it.restAfterSec == null) it.restAfterSec = draft.exerciseRestSec;
+    if (it.cycleRestSec == null) it.cycleRestSec = draft.circuitRestSec;
+  }
+  let snapshot = JSON.stringify(draft); // 展開しただけでは「変更あり」にしない
   const isDirty = () => JSON.stringify(draft) !== snapshot;
 
   app.guard = {
@@ -28,6 +41,7 @@ export function renderEditor(root, id) {
   const form = h('div', { class: 'form' });
   const totalEl = h('div', { class: 'total-box' });
 
+  // ---- メニューの流れ（時系列） ----
   const flowBox = h('details', { class: 'card flow-box' }, h('summary', null, 'このメニューの流れを確認する'));
   const flowBody = h('div');
   flowBox.append(flowBody);
@@ -86,12 +100,9 @@ export function renderEditor(root, id) {
       }, flowAll ? '折りたたむ' : `続きを表示（あと${hidden}行）`) : null);
   }
 
-  let restRedraws = []; // ③の休憩を変えたとき、各種目の休憩表示を描き直す
-  const refreshRests = () => { for (const fn of restRedraws) fn(); };
-
   const updateTotal = () => {
     drawFlow();
-    const plan = buildPlan({ ...draft, laps: draft.laps });
+    const plan = buildPlan(draft);
     clear(totalEl);
     totalEl.append(
       h('span', { class: 'total-label' }, '合計時間'),
@@ -103,145 +114,144 @@ export function renderEditor(root, id) {
     onInput: (e) => { draft.name = e.target.value; },
   });
 
+  // ---- 一覧の状態 ----
+  let openKey = null; // 開いている行（'prep' または種目のid）
+  let modeOpen = false; // 「進め方」を開いているか
+  const cycOpen = new Set(); // 「サイクル」を開いている種目
+  const split = new Set(); // セット間と「次の種目まで」の休憩を分けて決める種目
+  draft.items.forEach((it, i) => { if (it.sets > 1 && it.setRestSec !== it.restAfterSec && i < draft.items.length - 1) split.add(it.id); });
+  let sumEls = [];
+  const refreshSummaries = () => {
+    sumEls.forEach(([el, it], i) => { el.textContent = itemSummary(draft, it, i === sumEls.length - 1); });
+  };
+  const changed = () => { refreshSummaries(); updateTotal(); };
+  const toggle = (key) => { openKey = openKey === key ? null : key; build(); };
+
   function build() {
     clear(form);
     const circuit = draft.repeatMode === 'circuit';
-    const individual = draft.timeMode === 'individual';
-
     form.append(
       h('section', { class: 'card' }, h('label', { class: 'fld-label' }, 'メニュー名'), nameInput),
-      h('section', { class: 'card' },
-        h('div', { class: 'fld-label' }, '① 運動時間'),
-        segmented({
-          label: '運動時間の決め方', value: draft.timeMode,
-          options: [{ value: 'common', label: '全種目で同じ' }, { value: 'individual', label: '種目ごとに決める' }],
-          onChange: (v) => { draft.timeMode = v; build(); },
-        }),
-        individual ? h('p', { class: 'meta' }, '運動時間は、下の「④ 種目」で1つずつ決めます。') : timeField({
-          label: '1セットの運動時間', value: draft.commonWorkSec, min: 1, max: T,
-          onChange: (v) => { draft.commonWorkSec = v; updateTotal(); },
-        })),
-      h('section', { class: 'card' },
-        h('div', { class: 'fld-label' }, '② 進め方'),
+      h('section', null,
+        h('h2', { class: 'sec' }, `種目（${draft.items.length}）`),
+        h('p', { class: 'meta it-help' }, circuit ? '行を押すと、運動時間を変えられます。' : '行を押すと、運動時間・休憩・セット数を変えられます。'),
+        itemsList(),
+        h('button', { class: 'btn btn-primary btn-lg btn-block', onClick: openPicker }, '＋ 種目を追加')),
+      h('details', { class: 'card flow-box', open: circuit || modeOpen, onToggle: (e) => { modeOpen = e.target.open; } },
+        h('summary', null, `進め方：${circuit ? `サーキット（${draft.laps}周）` : '1種目ずつ'}`),
         segmented({
           label: '進め方', value: draft.repeatMode,
           options: [{ value: 'exercise', label: '1種目ずつ' }, { value: 'circuit', label: 'サーキット' }],
-          onChange: (v) => { draft.repeatMode = v; openKeys = null; flowAll = false; build(); },
+          onChange: (v) => { draft.repeatMode = v; openKeys = null; flowAll = false; modeOpen = true; build(); },
         }),
         h('p', { class: 'meta' }, circuit
           ? 'サーキット：種目を順番に1回ずつ行い、最後の種目まで終わったら最初に戻ります。これを「周回数」の分だけ繰り返します。'
-          : '1種目ずつ：1つの種目を決めたセット数だけ行ってから、次の種目へ進みます。「サイクル」を2以上にすると、同じ内容をもう一度繰り返せます（例：4セット×2サイクル＝4セット → 休憩 → 4セット）。'),
+          : '1種目ずつ：上の種目を順番に、決めたセット数だけ行ってから次の種目へ進みます。'),
         circuit ? numberField({
           label: '周回数（全種目を何周するか）', value: draft.laps, min: 1, max: LIMITS.MAX_LAPS, steps: [-1, 1], format: (v) => `${v}周`,
           onChange: (v) => { draft.laps = v; updateTotal(); },
-        }) : null),
-      h('section', { class: 'card' },
-        h('div', { class: 'fld-label' }, '③ 準備と休憩の時間'),
-        timeField({ label: '準備時間（スタートから最初の運動まで）', value: draft.prepSec, min: 0, max: T, onChange: (v) => { draft.prepSec = v; updateTotal(); } }),
-        circuit ? null : timeField({ label: 'セット間の休憩（1セット終わるごとの休憩）', value: draft.setRestSec, min: 0, max: T, onChange: (v) => { draft.setRestSec = v; refreshRests(); updateTotal(); } }),
-        circuit ? null : timeField({
-          label: 'サイクル間の休憩（1サイクル終わるごとの休憩）', value: draft.circuitRestSec, min: 0, max: T,
-          onChange: (v) => { draft.circuitRestSec = v; refreshRests(); updateTotal(); },
-        }),
-        timeField({ label: '種目間の休憩（次の種目に移るときの休憩）', value: draft.exerciseRestSec, min: 0, max: T, onChange: (v) => { draft.exerciseRestSec = v; refreshRests(); updateTotal(); } }),
-        circuit ? timeField({
-          label: '周回間の休憩（1周終わるごとの休憩）', value: draft.circuitRestSec, min: 0, max: T,
-          onChange: (v) => { draft.circuitRestSec = v; updateTotal(); },
-        }) : h('p', { class: 'meta' }, 'ここで決めた休憩は、すべての種目に使われます。一部だけ変えたいとき（例：4種目めのあとだけ長く休む）は、下の「④ 種目」で各種目の下に出る「次の種目までの休憩」の「変える」を押してください。')),
-      h('section', null,
-        h('h2', { class: 'sec' }, `④ 種目（${draft.items.length}）`),
-        itemsList(),
-        h('button', { class: 'btn btn-primary btn-lg btn-block', onClick: openPicker }, '＋ 種目を追加')),
+        }) : null,
+        circuit ? timeField({ label: '種目間の休憩（次の種目に移るときの休憩）', value: draft.exerciseRestSec, min: 0, max: T, onChange: (v) => { draft.exerciseRestSec = v; updateTotal(); } }) : null,
+        circuit ? timeField({ label: '周回間の休憩（1周終わるごとの休憩）', value: draft.circuitRestSec, min: 0, max: T, onChange: (v) => { draft.circuitRestSec = v; updateTotal(); } }) : null),
       flowBox,
     );
     updateTotal();
   }
 
+  /** 一覧の1行（押すと開く） */
+  function rowHead(key, { no, name, sumEl, handle }) {
+    const open = openKey === key;
+    return h('div', {
+      class: 'it-row', role: 'button', tabindex: '0', 'aria-expanded': open ? 'true' : 'false',
+      onClick: (e) => { if (!e.target.closest('.drag-handle')) toggle(key); },
+      onKeydown: (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(key); } },
+    },
+    handle ? h('span', { class: 'drag-handle', role: 'img', 'aria-label': 'ドラッグして並び替え' }, '⠿') : null,
+    no != null ? h('span', { class: 'item-no' }, String(no)) : null,
+    h('div', { class: 'menu-main' }, h('div', { class: 'menu-name' }, name), sumEl),
+    h('span', { class: 'it-chev', 'aria-hidden': 'true' }, open ? '▴' : '▾'));
+  }
+
   function itemsList() {
     const circuit = draft.repeatMode === 'circuit';
-    const individual = draft.timeMode === 'individual';
     const ul = h('ul', { class: 'list sortable' });
-    restRedraws = [];
+    sumEls = [];
+    // 準備（スタートから最初の運動まで）
+    const prepText = (v) => (v ? formatDuration(v) : 'なし');
+    const prepSum = h('div', { class: 'meta' }, prepText(draft.prepSec));
+    ul.append(h('li', { class: 'card item it-prep' + (openKey === 'prep' ? ' open' : '') },
+      rowHead('prep', { name: '準備（スタートから最初の運動まで）', sumEl: prepSum }),
+      openKey === 'prep' ? h('div', { class: 'it-body' },
+        timeField({ label: '準備時間', value: draft.prepSec, min: 0, max: T, onChange: (v) => { draft.prepSec = v; prepSum.textContent = prepText(v); updateTotal(); } }),
+        h('div', { class: 'row-actions' }, h('button', { class: 'btn btn-primary', onClick: () => toggle('prep') }, 'OK'))) : null));
     if (!draft.items.length) ul.append(h('li', { class: 'meta pad' }, 'まだ種目がありません。下の「＋ 種目を追加」から選んでください。'));
+    const lastIdx = draft.items.length - 1;
     draft.items.forEach((it, i) => {
-      const ovrWrap = h('div');
-      const drawOvr = () => { clear(ovrWrap); if (!circuit) mount(ovrWrap, restOverrides(it)); };
-      drawOvr();
-      if (!circuit) restRedraws.push(drawOvr);
-      ul.append(h('li', { class: 'card item', 'data-sortable': '' },
-        h('div', { class: 'row-top' },
-          h('span', { class: 'drag-handle', role: 'img', 'aria-label': 'ドラッグして並び替え' }, '⠿'),
-          h('span', { class: 'item-no' }, String(i + 1)),
-          h('div', { class: 'menu-main' }, h('div', { class: 'menu-name' }, it.name)),
-          h('button', { class: 'btn btn-icon', 'aria-label': '上へ', disabled: i === 0, onClick: () => reorder(i, i - 1) }, '↑'),
-          h('button', { class: 'btn btn-icon', 'aria-label': '下へ', disabled: i === draft.items.length - 1, onClick: () => reorder(i, i + 1) }, '↓'),
-          h('button', { class: 'btn btn-danger-ghost btn-icon', 'aria-label': `${it.name}を外す`, onClick: () => { draft.items.splice(i, 1); build(); } }, '✕')),
-        individual ? timeField({ label: '運動時間', value: it.workSec, min: 1, max: T, onChange: (v) => { it.workSec = v; updateTotal(); } }) : null,
-        circuit ? null : numberField({
-          label: 'セット数（この種目を何回行うか）', value: it.sets, min: 1, max: LIMITS.MAX_SETS, steps: [-1, 1], format: (v) => `${v}セット`,
-          onChange: (v) => { it.sets = v; drawOvr(); updateTotal(); },
-        }),
-        circuit ? null : numberField({
-          label: 'サイクル数（上のセットをまとめて何回繰り返すか）', value: it.cycles, min: 1, max: LIMITS.MAX_SETS, steps: [-1, 1], format: (v) => `${v}サイクル`,
-          onChange: (v) => { it.cycles = v; drawOvr(); updateTotal(); },
-        }),
-        ovrWrap,
-        circuit || i === draft.items.length - 1 ? null : nextRest(it)));
+      const last = i === lastIdx;
+      const sumEl = h('div', { class: 'meta' }, itemSummary(draft, it, last));
+      sumEls.push([sumEl, it]);
+      const open = openKey === it.id;
+      ul.append(h('li', { class: 'card item' + (open ? ' open' : ''), 'data-sortable': '' },
+        rowHead(it.id, { no: i + 1, name: it.name, sumEl, handle: true }),
+        open ? itemBody(it, i, last, circuit) : null));
     });
     makeSortable(ul, { onReorder: reorder });
     return ul;
   }
 
-  /** 「次の種目までの休憩」。ふだんは③の種目間の休憩を使い、「変える」でこの種目のあとだけ別の長さにできる */
-  function nextRest(it) {
-    const wrap = h('div', { class: 'next-rest' });
-    const draw = () => {
-      const on = it.restAfterSec !== null && it.restAfterSec !== undefined;
-      const sec = on ? it.restAfterSec : draft.exerciseRestSec;
-      clear(wrap);
-      mount(wrap,
-        h('div', { class: 'next-rest-head' },
-          h('span', { class: 'next-rest-text' }, '↓ 次の種目までの休憩：', h('b', null, sec ? formatDuration(sec) : 'なし'),
-            h('span', { class: 'meta' }, on ? '（ここだけ変更中）' : '（③の種目間の休憩）')),
-          h('button', {
-            class: 'btn next-rest-btn',
-            onClick: () => { it.restAfterSec = on ? null : draft.exerciseRestSec; draw(); updateTotal(); },
-          }, on ? '③に戻す' : '変える')),
-        on ? timeField({ label: 'この種目のあとの休憩', value: it.restAfterSec, min: 0, max: T, onChange: (v) => { it.restAfterSec = v; head(); updateTotal(); } }) : null);
-    };
-    // 時間を操作している最中は入力欄を作り直さず、見出しの数字だけ更新する
-    const head = () => { const b = wrap.querySelector('.next-rest-text b'); if (b) b.textContent = it.restAfterSec ? formatDuration(it.restAfterSec) : 'なし'; };
-    draw();
-    restRedraws.push(() => { if (it.restAfterSec === null || it.restAfterSec === undefined) draw(); });
-    return wrap;
-  }
-
-  /** セット間・サイクル間の休憩を、この種目だけ変える設定（2セット以上・2サイクル以上のときだけ関係する） */
-  function restOverrides(it) {
-    const rows = [];
-    if (it.sets > 1) rows.push(['setRestSec', 'セット間の休憩', () => draft.setRestSec]);
-    if (it.cycles > 1) rows.push(['cycleRestSec', 'サイクル間の休憩', () => draft.circuitRestSec]);
-    if (!rows.length) return null;
-    const used = rows.some(([k]) => it[k] !== null && it[k] !== undefined);
-    const det = h('details', { class: 'ovr-box', open: used }, h('summary', null, `この種目だけ${rows.map((r) => r[1].replace('の休憩', '')).join('・')}の休憩を変える（任意）`));
-    for (const [key, label, menuVal] of rows) {
-      const wrap = h('div', { class: 'ovr' });
-      const draw = () => {
-        clear(wrap);
-        const on = it[key] !== null && it[key] !== undefined;
-        mount(wrap,
-          h('label', { class: 'ovr-chk' },
-            h('input', {
-              type: 'checkbox', checked: on,
-              onChange: (e) => { it[key] = e.target.checked ? menuVal() : null; draw(); updateTotal(); },
-            }),
-            h('span', null, on ? `${label}を変える` : `${label}：③の設定のまま（${formatDuration(menuVal())}）`)),
-          on ? timeField({ label: '休憩時間', value: it[key], min: 0, max: T, onChange: (v) => { it[key] = v; updateTotal(); } }) : null);
-      };
-      draw();
-      det.append(wrap);
+  /** 開いた行の中身 */
+  function itemBody(it, i, last, circuit) {
+    const body = h('div', { class: 'it-body' });
+    body.append(timeField({ label: '運動時間', value: it.workSec, min: 1, max: T, onChange: (v) => { it.workSec = v; changed(); } }));
+    if (!circuit) {
+      const multi = it.sets > 1;
+      if (multi && !last && split.has(it.id)) {
+        body.append(
+          timeField({ label: 'セット間の休憩（1セット終わるごと）', value: it.setRestSec, min: 0, max: T, onChange: (v) => { it.setRestSec = v; changed(); } }),
+          timeField({ label: '次の種目までの休憩', value: it.restAfterSec, min: 0, max: T, onChange: (v) => { it.restAfterSec = v; changed(); } }),
+          h('button', { class: 'btn btn-ghost it-link', onClick: () => { split.delete(it.id); it.restAfterSec = it.setRestSec; build(); } }, '休憩を1つにまとめる'));
+      } else if (last && !multi) {
+        body.append(h('p', { class: 'meta' }, '最後の種目なので、このあとの休憩はありません（運動が終わるとトレーニング終了です）。'));
+      } else {
+        body.append(timeField({
+          label: last ? '休憩（1セット終わるごと）' : multi ? '休憩（1セット終わるごと・次の種目まで）' : '休憩（次の種目まで）',
+          value: last ? it.setRestSec : it.restAfterSec, min: 0, max: T,
+          onChange: (v) => { it.setRestSec = v; if (!last) it.restAfterSec = v; changed(); },
+        }));
+        if (multi && !last) body.append(h('button', { class: 'btn btn-ghost it-link', onClick: () => { split.add(it.id); build(); } }, '次の種目までの休憩だけ別の長さにする'));
+      }
+      body.append(numberField({
+        label: 'セット数', value: it.sets, min: 1, max: LIMITS.MAX_SETS, steps: [-1, 1], format: (v) => `${v}セット`,
+        onChange: (v) => {
+          const was = it.sets > 1;
+          it.sets = v;
+          if (was !== (v > 1)) build(); else changed(); // 1セット⇔2セット以上で休憩の欄が変わる
+        },
+      }));
+      body.append(h('details', {
+        class: 'ovr-box', open: it.cycles > 1 || cycOpen.has(it.id),
+        onToggle: (e) => { if (e.target.open) cycOpen.add(it.id); else cycOpen.delete(it.id); },
+      },
+      h('summary', null, 'サイクル（上のセットをまとめて繰り返す・任意）'),
+      numberField({
+        label: 'サイクル数', value: it.cycles, min: 1, max: LIMITS.MAX_SETS, steps: [-1, 1], format: (v) => `${v}サイクル`,
+        onChange: (v) => {
+          const was = it.cycles > 1;
+          it.cycles = v;
+          if (was !== (v > 1)) { cycOpen.add(it.id); build(); } else changed();
+        },
+      }),
+      it.cycles > 1
+        ? timeField({ label: 'サイクル間の休憩（1サイクル終わるごと）', value: it.cycleRestSec, min: 0, max: T, onChange: (v) => { it.cycleRestSec = v; changed(); } })
+        : h('p', { class: 'meta' }, '例：4セット×2サイクル＝4セット → 休憩 → 4セット')));
     }
-    return det;
+    body.append(h('div', { class: 'row-actions wrap' },
+      h('button', { class: 'btn btn-primary', onClick: () => toggle(it.id) }, 'OK'),
+      h('button', { class: 'btn', onClick: () => duplicate(i) }, '複製'),
+      h('button', { class: 'btn btn-icon', 'aria-label': '上へ', disabled: i === 0, onClick: () => reorder(i, i - 1) }, '↑'),
+      h('button', { class: 'btn btn-icon', 'aria-label': '下へ', disabled: last, onClick: () => reorder(i, i + 1) }, '↓'),
+      h('button', { class: 'btn btn-danger-ghost', 'aria-label': `${it.name}を外す`, onClick: () => { draft.items.splice(i, 1); openKey = null; build(); } }, '外す')));
+    return body;
   }
 
   function reorder(from, to) {
@@ -249,8 +259,28 @@ export function renderEditor(root, id) {
     build();
   }
 
+  function duplicate(i) {
+    const src = draft.items[i];
+    const copy = { ...src, id: newItem(src.name).id };
+    if (split.has(src.id)) split.add(copy.id);
+    draft.items.splice(i + 1, 0, copy);
+    openKey = copy.id;
+    build();
+    toast(`「${src.name}」を複製しました`);
+  }
+
+  /** 新しい種目は、直前の種目と同じ時間・休憩・セット数で追加する（同じ設定の種目を続けて入れやすいように） */
   function addItem(name) {
-    draft.items.push(newItem(name, draft.commonWorkSec));
+    const prev = draft.items[draft.items.length - 1];
+    const it = newItem(name, prev ? prev.workSec : draft.commonWorkSec);
+    it.sets = prev ? prev.sets : 1;
+    it.cycles = prev ? prev.cycles : 1;
+    it.setRestSec = prev ? prev.setRestSec : draft.setRestSec;
+    it.restAfterSec = prev ? prev.restAfterSec : draft.setRestSec;
+    it.cycleRestSec = prev ? prev.cycleRestSec : draft.circuitRestSec;
+    if (prev && split.has(prev.id)) split.add(it.id);
+    draft.items.push(it);
+    openKey = null;
     build();
   }
 
@@ -275,7 +305,7 @@ export function renderEditor(root, id) {
     drawList();
     const m = openModal(h('div', { class: 'picker' },
       h('h2', { class: 'modal-title' }, '種目を追加'),
-      h('p', { class: 'meta' }, '同じ種目を何回でも追加できます。'),
+      h('p', { class: 'meta' }, '同じ種目を何回でも追加できます。時間や休憩は、追加したあと一覧の行を押して変えられます。'),
       h('div', { class: 'add-row' }, input, h('button', { class: 'btn btn-primary', onClick: addNew }, '登録して追加')),
       list,
       h('div', { class: 'modal-actions' }, h('button', { class: 'btn btn-primary', onClick: () => m.close() }, '閉じる'))));
@@ -295,7 +325,7 @@ export function renderEditor(root, id) {
   }
 
   build();
-  mount(root, 
+  mount(root,
     pageHeader(isNew ? 'メニュー作成' : 'メニュー編集', '#/menus'),
     form,
     h('div', { class: 'bottom-bar' }, totalEl, h('button', { class: 'btn btn-primary btn-lg', onClick: save }, '保存')));
