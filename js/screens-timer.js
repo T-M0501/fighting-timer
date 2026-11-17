@@ -74,15 +74,18 @@ export function renderTimer(root, id) {
   function announce(index) {
     const seg = plan.segments[index];
     const a = app.audio;
+    // iPhoneは読み上げ中に電子音を小さくするので、電子音が鳴り終わってから話す。
+    // 最初の1回だけは「開始」ボタンを押した操作の中で話し始める（iPhoneで声を出せるようにするため）。
+    const wait = (ms) => ({ delayMs: index === 0 || !app.state.settings.beepOn ? 0 : ms });
     if (seg.kind === 'work') {
       a.beep('work');
-      a.speak(index === 0 ? `${seg.name}、運動開始` : '運動開始');
+      a.speak(index === 0 ? `${seg.name}、運動開始` : '運動開始', wait(650));
     } else if (seg.kind === 'rest') {
       a.beep('rest');
-      a.speak(`休憩開始。次は${seg.name}`);
+      a.speak(`休憩開始。次は${seg.name}`, wait(650));
     } else {
       a.beep('prep');
-      a.speak(`次は${seg.name}`);
+      a.speak(`次は${seg.name}`, wait(400));
     }
     notifyIfHidden(seg.kind === 'work' ? `運動開始：${seg.name}` : seg.kind === 'rest' ? '休憩開始' : `準備：${seg.name}`);
   }
@@ -109,7 +112,7 @@ export function renderTimer(root, id) {
   function onFinished() {
     finishPending = true;
     app.audio.beep('finish');
-    setTimeout(() => app.audio.speak('トレーニング終了です'), 1500);
+    app.audio.speak('トレーニング終了です', { delayMs: app.state.settings.beepOn ? 2000 : 0 });
     notifyIfHidden('トレーニング終了です');
     clearInterval(intervalId);
     intervalId = null;

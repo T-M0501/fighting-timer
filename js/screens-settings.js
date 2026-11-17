@@ -114,6 +114,26 @@ export function renderSettings(root) {
     class: 'select', 'aria-label': 'カウントダウン電子音',
     onChange: (e) => saveSettings({ countdown: Number(e.target.value) }),
   }, COUNTDOWN_CHOICES.map((n) => h('option', { value: n, selected: n === st.countdown }, n === 0 ? 'なし' : `${n}秒前`)));
+  // 実際のタイマーと同じように、ボタン操作のあと時間をおいて音を出すテスト（設定のオン・オフに関係なく鳴らす）
+  const flowTestMsg = h('p', { class: 'meta', 'aria-live': 'polite' }, '実際のタイマーと同じ順番で音を出します。トレーニング中に音が出ないときの確認に使えます。');
+  let flowTestBusy = false;
+  function flowTest() {
+    if (flowTestBusy) return;
+    flowTestBusy = true;
+    const a = app.audio;
+    a.unlock();
+    flowTestMsg.textContent = 'テスト中… ①開始の音 →②「運動開始」の声 →③カウントダウン3回 →④休憩の音 →⑤「休憩開始」の声 の順に鳴ります。';
+    const F = { force: true };
+    setTimeout(() => { a.beep('work', F); a.speak('運動開始', { force: true, delayMs: 650 }); }, 1500);
+    for (const t of [5000, 6000, 7000]) setTimeout(() => a.beep('count', F), t);
+    setTimeout(() => { a.beep('rest', F); a.speak('休憩開始', { force: true, delayMs: 650 }); }, 8000);
+    setTimeout(() => {
+      flowTestBusy = false;
+      const state = a.ctx ? a.ctx.state : 'なし';
+      flowTestMsg.textContent = `テスト終了。①〜⑤のうち聞こえなかった番号があれば、その番号と、次のかっこの中の文字を開発者に伝えてください。（音の状態：${state}）`;
+    }, 11000);
+  }
+
   // 音声ガイドの声（女性/男性）。切り替えるとすぐ試聴できる
   const voiceSeg = h('div');
   const voiceHint = h('p', { class: 'meta' });
@@ -185,6 +205,8 @@ export function renderSettings(root) {
         h('button', { class: 'btn', onClick: () => { app.audio.unlock(); app.audio.beep('count', { force: true }); } }, 'カウントダウン'),
         h('button', { class: 'btn', onClick: () => { app.audio.unlock(); app.audio.speak('運動開始。次はスクワット', { force: true }); } }, '音声ガイド'),
         h('button', { class: 'btn', onClick: () => { app.audio.unlock(); app.audio.beep('finish', { force: true }); } }, '終了メロディー')),
+      h('button', { class: 'btn btn-block', onClick: flowTest }, 'タイマーと同じ流れで試す（約10秒）'),
+      flowTestMsg,
       h('p', { class: 'meta' }, '音が小さいときは、端末本体の音量を上げ、マナーモード（消音）になっていないか確認してください。このアプリは、端末の最大音量より大きな音は出せません。')),
     h('section', { class: 'card' },
       h('h2', { class: 'sec in' }, '画面'),

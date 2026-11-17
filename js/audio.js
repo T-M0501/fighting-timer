@@ -17,6 +17,8 @@ export class AudioEngine {
     this.master = null;
     this.lastBeepAt = 0;
     this.voice = null;
+    this.speakTimer = null;
+    this.utter = null; // 読み上げ中の発話を保持（途中で破棄されて止まるのを防ぐ）
   }
 
   /** ユーザーの操作(タップ)の中で必ず呼ぶ。iOSでは操作内でないと音が出ない */
@@ -50,6 +52,9 @@ export class AudioEngine {
           shaper.connect(this.master);
           this.master.connect(this.ctx.destination);
           this.input = comp;
+          // iPhoneでは読み上げや着信などで音が止められる(interrupted)ことがある。止められたら自分で再開する。
+          this.ctx.addEventListener('statechange', () => this._wake());
+          document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') this._wake(); });
         }
       }
       if (this.ctx && this.ctx.state !== 'running') this.ctx.resume().catch(() => {});
@@ -57,6 +62,13 @@ export class AudioEngine {
       console.warn('AudioContext初期化失敗', e);
     }
     this.primeSpeech();
+  }
+
+  /** 電子音の出口が止められていたら再開する */
+  _wake() {
+    try {
+      if (this.ctx && this.ctx.state !== 'running' && this.ctx.state !== 'closed') this.ctx.resume().catch(() => {});
+    } catch { /* ignore */ }
   }
 
   primeSpeech() {
@@ -113,9 +125,10 @@ export class AudioEngine {
       return;
     }
     // 音声再生などで一時停止(suspended/interrupted)になっていたら、再開できてから鳴らす。
-    // 再開に0.5秒以上かかったときは、遅れた音が重なって鳴らないよう捨てる。
+    // カウント音は0.5秒、切り替え音などは2秒以上遅れたら、ずれて鳴らないよう捨てる。
+    const limit = kind === 'count' || kind === 'resume' ? 500 : 2000;
     this.ctx.resume().then(() => {
-      if (performance.now() - nowMs < 500 && this.ctx.state === 'running') this._play(kind);
+      if (performance.now() - nowMs < limit && this.ctx.state === 'running') this._play(kind);
     }).catch(() => {});
   }
 
@@ -168,13 +181,30 @@ export class AudioEngine {
     return { name: voice ? voice.name : null, substituted };
   }
 
-  speak(text, { force = false } = {}) {
+  /**
+   * delayMs: 読み上げを始めるまでの待ち時間。
+   * iPhoneは読み上げ中にほかの音を小さくするため、切り替えの電子音が鳴り終わってから話し始める。
+   */
+  speak(text, { force = false, delayMs = 0 } = {}) {
     const st = this.getSettings();
     if (!force && !st.voiceOn) return;
     const s = globalThis.speechSynthesis;
     if (!s || typeof SpeechSynthesisUtterance === 'undefined') return;
+    clearTimeout(this.speakTimer);
+    let busy = false;
     try {
-      s.cancel(); // 前の読み上げと重ならないようにする
+      busy = s.speaking || s.pending;
+      if (busy) s.cancel(); // 前の読み上げと重ならないようにする
+    } catch { /* ignore */ }
+    // 取り消しの直後に話し始めると、iPhoneでは声が出ないことがあるので少し待つ
+    const wait = Math.max(delayMs, busy ? 80 : 0);
+    if (wait > 0) this.speakTimer = setTimeout(() => this._speakNow(text, st), wait);
+    else this._speakNow(text, st);
+  }
+
+  _speakNow(text, st) {
+    const s = globalThis.speechSynthesis;
+    try {
       const u = new SpeechSynthesisUtterance(text);
       u.lang = 'ja-JP';
       u.volume = 1;
@@ -182,6 +212,9 @@ export class AudioEngine {
       u.rate = substituted ? 0.95 : 1;
       u.pitch = substituted ? 0.55 : 1; // 男性の声がない端末では、声を低くして代用
       if (voice) u.voice = voice;
+      // 読み上げのあとに電子音が止められたままにならないよう、終わったら再開を試みる
+      u.onend = u.onerror = () => { if (this.utter === u) this.utter = null; this._wake(); };
+      this.utter = u;
       s.speak(u);
     } catch (e) {
       console.warn('音声読み上げ失敗', e);
@@ -189,6 +222,7 @@ export class AudioEngine {
   }
 
   cancelSpeech() {
+    clearTimeout(this.speakTimer);
     try { globalThis.speechSynthesis?.cancel(); } catch { /* ignore */ }
   }
 }

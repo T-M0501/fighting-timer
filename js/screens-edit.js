@@ -86,6 +86,9 @@ export function renderEditor(root, id) {
       }, flowAll ? '折りたたむ' : `続きを表示（あと${hidden}行）`) : null);
   }
 
+  let restRedraws = []; // ③の休憩を変えたとき、各種目の休憩表示を描き直す
+  const refreshRests = () => { for (const fn of restRedraws) fn(); };
+
   const updateTotal = () => {
     drawFlow();
     const plan = buildPlan({ ...draft, laps: draft.laps });
@@ -135,16 +138,16 @@ export function renderEditor(root, id) {
       h('section', { class: 'card' },
         h('div', { class: 'fld-label' }, '③ 準備と休憩の時間'),
         timeField({ label: '準備時間（スタートから最初の運動まで）', value: draft.prepSec, min: 0, max: T, onChange: (v) => { draft.prepSec = v; updateTotal(); } }),
-        circuit ? null : timeField({ label: 'セット間の休憩（1セット終わるごとの休憩）', value: draft.setRestSec, min: 0, max: T, onChange: (v) => { draft.setRestSec = v; updateTotal(); } }),
+        circuit ? null : timeField({ label: 'セット間の休憩（1セット終わるごとの休憩）', value: draft.setRestSec, min: 0, max: T, onChange: (v) => { draft.setRestSec = v; refreshRests(); updateTotal(); } }),
         circuit ? null : timeField({
           label: 'サイクル間の休憩（1サイクル終わるごとの休憩）', value: draft.circuitRestSec, min: 0, max: T,
-          onChange: (v) => { draft.circuitRestSec = v; updateTotal(); },
+          onChange: (v) => { draft.circuitRestSec = v; refreshRests(); updateTotal(); },
         }),
-        timeField({ label: '種目間の休憩（次の種目に移るときの休憩）', value: draft.exerciseRestSec, min: 0, max: T, onChange: (v) => { draft.exerciseRestSec = v; updateTotal(); } }),
+        timeField({ label: '種目間の休憩（次の種目に移るときの休憩）', value: draft.exerciseRestSec, min: 0, max: T, onChange: (v) => { draft.exerciseRestSec = v; refreshRests(); updateTotal(); } }),
         circuit ? timeField({
           label: '周回間の休憩（1周終わるごとの休憩）', value: draft.circuitRestSec, min: 0, max: T,
           onChange: (v) => { draft.circuitRestSec = v; updateTotal(); },
-        }) : h('p', { class: 'meta' }, 'ここで決めた休憩は、すべての種目に使われます。種目によって変えたいときは、下の各種目にある「この種目だけ休憩を変える」を開いてください。')),
+        }) : h('p', { class: 'meta' }, 'ここで決めた休憩は、すべての種目に使われます。一部だけ変えたいとき（例：4種目めのあとだけ長く休む）は、下の「④ 種目」で各種目の下に出る「次の種目までの休憩」の「変える」を押してください。')),
       h('section', null,
         h('h2', { class: 'sec' }, `④ 種目（${draft.items.length}）`),
         itemsList(),
@@ -158,8 +161,13 @@ export function renderEditor(root, id) {
     const circuit = draft.repeatMode === 'circuit';
     const individual = draft.timeMode === 'individual';
     const ul = h('ul', { class: 'list sortable' });
+    restRedraws = [];
     if (!draft.items.length) ul.append(h('li', { class: 'meta pad' }, 'まだ種目がありません。下の「＋ 種目を追加」から選んでください。'));
     draft.items.forEach((it, i) => {
+      const ovrWrap = h('div');
+      const drawOvr = () => { clear(ovrWrap); if (!circuit) mount(ovrWrap, restOverrides(it)); };
+      drawOvr();
+      if (!circuit) restRedraws.push(drawOvr);
       ul.append(h('li', { class: 'card item', 'data-sortable': '' },
         h('div', { class: 'row-top' },
           h('span', { class: 'drag-handle', role: 'img', 'aria-label': 'ドラッグして並び替え' }, '⠿'),
@@ -171,27 +179,51 @@ export function renderEditor(root, id) {
         individual ? timeField({ label: '運動時間', value: it.workSec, min: 1, max: T, onChange: (v) => { it.workSec = v; updateTotal(); } }) : null,
         circuit ? null : numberField({
           label: 'セット数（この種目を何回行うか）', value: it.sets, min: 1, max: LIMITS.MAX_SETS, steps: [-1, 1], format: (v) => `${v}セット`,
-          onChange: (v) => { it.sets = v; updateTotal(); },
+          onChange: (v) => { it.sets = v; drawOvr(); updateTotal(); },
         }),
         circuit ? null : numberField({
           label: 'サイクル数（上のセットをまとめて何回繰り返すか）', value: it.cycles, min: 1, max: LIMITS.MAX_SETS, steps: [-1, 1], format: (v) => `${v}サイクル`,
-          onChange: (v) => { it.cycles = v; updateTotal(); },
+          onChange: (v) => { it.cycles = v; drawOvr(); updateTotal(); },
         }),
-        circuit ? null : restOverrides(it)));
+        ovrWrap,
+        circuit || i === draft.items.length - 1 ? null : nextRest(it)));
     });
     makeSortable(ul, { onReorder: reorder });
     return ul;
   }
 
-  /** 種目ごとの休憩の個別設定（チェックを外すとメニュー共通の値を使う） */
+  /** 「次の種目までの休憩」。ふだんは③の種目間の休憩を使い、「変える」でこの種目のあとだけ別の長さにできる */
+  function nextRest(it) {
+    const wrap = h('div', { class: 'next-rest' });
+    const draw = () => {
+      const on = it.restAfterSec !== null && it.restAfterSec !== undefined;
+      const sec = on ? it.restAfterSec : draft.exerciseRestSec;
+      clear(wrap);
+      mount(wrap,
+        h('div', { class: 'next-rest-head' },
+          h('span', { class: 'next-rest-text' }, '↓ 次の種目までの休憩：', h('b', null, sec ? formatDuration(sec) : 'なし'),
+            h('span', { class: 'meta' }, on ? '（ここだけ変更中）' : '（③の種目間の休憩）')),
+          h('button', {
+            class: 'btn next-rest-btn',
+            onClick: () => { it.restAfterSec = on ? null : draft.exerciseRestSec; draw(); updateTotal(); },
+          }, on ? '③に戻す' : '変える')),
+        on ? timeField({ label: 'この種目のあとの休憩', value: it.restAfterSec, min: 0, max: T, onChange: (v) => { it.restAfterSec = v; head(); updateTotal(); } }) : null);
+    };
+    // 時間を操作している最中は入力欄を作り直さず、見出しの数字だけ更新する
+    const head = () => { const b = wrap.querySelector('.next-rest-text b'); if (b) b.textContent = it.restAfterSec ? formatDuration(it.restAfterSec) : 'なし'; };
+    draw();
+    restRedraws.push(() => { if (it.restAfterSec === null || it.restAfterSec === undefined) draw(); });
+    return wrap;
+  }
+
+  /** セット間・サイクル間の休憩を、この種目だけ変える設定（2セット以上・2サイクル以上のときだけ関係する） */
   function restOverrides(it) {
-    const rows = [
-      ['setRestSec', 'セット間の休憩', () => draft.setRestSec],
-      ['cycleRestSec', 'サイクル間の休憩', () => draft.circuitRestSec],
-      ['restAfterSec', 'この種目のあとの休憩', () => draft.exerciseRestSec],
-    ];
+    const rows = [];
+    if (it.sets > 1) rows.push(['setRestSec', 'セット間の休憩', () => draft.setRestSec]);
+    if (it.cycles > 1) rows.push(['cycleRestSec', 'サイクル間の休憩', () => draft.circuitRestSec]);
+    if (!rows.length) return null;
     const used = rows.some(([k]) => it[k] !== null && it[k] !== undefined);
-    const det = h('details', { class: 'ovr-box', open: used }, h('summary', null, 'この種目だけ休憩を変える（任意）'));
+    const det = h('details', { class: 'ovr-box', open: used }, h('summary', null, `この種目だけ${rows.map((r) => r[1].replace('の休憩', '')).join('・')}の休憩を変える（任意）`));
     for (const [key, label, menuVal] of rows) {
       const wrap = h('div', { class: 'ovr' });
       const draw = () => {

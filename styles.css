@@ -90,6 +90,11 @@ h1, h2, p { margin: 0; }
 .ovr { margin-bottom: 6px; }
 .ovr-chk { display: flex; align-items: center; gap: 10px; min-height: 44px; font-size: 14px; }
 .ovr-chk input { width: 22px; height: 22px; accent-color: var(--primary); flex: none; }
+.next-rest { margin-top: 10px; padding-top: 8px; border-top: 1px dashed var(--line); }
+.next-rest-head { display: flex; align-items: center; gap: 8px; }
+.next-rest-text { flex: 1; min-width: 0; font-size: 14px; }
+.next-rest-text .meta { display: block; }
+.next-rest-btn { flex: none; min-height: 40px; padding: 4px 12px; font-size: 14px; }
 .warn-text { color: var(--danger); font-weight: 700; }
 .flow-box summary { min-height: 44px; display: flex; align-items: center; font-weight: 700; cursor: pointer; }
 .flow-box .seg { margin: 4px 0 8px; }
