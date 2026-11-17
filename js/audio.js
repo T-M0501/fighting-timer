@@ -61,7 +61,9 @@ export class AudioEngine {
     } catch (e) {
       console.warn('AudioContext初期化失敗', e);
     }
-    this.primeSpeech();
+    // 声の一覧を先に読み込んでおく。ここでは無音の読み上げをしない:
+    // 直後の本物の読み上げがそれを取り消す形になり、iPhoneで声が出なくなることがあるため。
+    try { globalThis.speechSynthesis?.getVoices(); } catch { /* ignore */ }
   }
 
   /** 電子音の出口が止められていたら再開する */
@@ -71,10 +73,11 @@ export class AudioEngine {
     } catch { /* ignore */ }
   }
 
+  /** タップの中で無音の読み上げをして、あとから(時間差で)声を出せるようにする。すぐ後に speak() を呼ぶ場合は不要 */
   primeSpeech() {
     try {
       const s = globalThis.speechSynthesis;
-      if (!s) return;
+      if (!s || s.speaking || s.pending) return;
       s.getVoices();
       const u = new SpeechSynthesisUtterance(' ');
       u.volume = 0;
@@ -213,7 +216,11 @@ export class AudioEngine {
       u.pitch = substituted ? 0.55 : 1; // 男性の声がない端末では、声を低くして代用
       if (voice) u.voice = voice;
       // 読み上げのあとに電子音が止められたままにならないよう、終わったら再開を試みる
-      u.onend = u.onerror = () => { if (this.utter === u) this.utter = null; this._wake(); };
+      const log = { text, voice: voice ? voice.name : '端末の標準', started: false, ended: false, error: '' };
+      this.lastSpeech = log; // 設定画面のテストで表示する診断用
+      u.onstart = () => { log.started = true; };
+      u.onend = () => { log.ended = true; if (this.utter === u) this.utter = null; this._wake(); };
+      u.onerror = (e) => { log.error = String((e && e.error) || '不明'); if (this.utter === u) this.utter = null; this._wake(); };
       this.utter = u;
       s.speak(u);
     } catch (e) {

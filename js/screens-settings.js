@@ -122,6 +122,7 @@ export function renderSettings(root) {
     flowTestBusy = true;
     const a = app.audio;
     a.unlock();
+    a.primeSpeech();
     flowTestMsg.textContent = 'テスト中… ①開始の音 →②「運動開始」の声 →③カウントダウン3回 →④休憩の音 →⑤「休憩開始」の声 の順に鳴ります。';
     const F = { force: true };
     setTimeout(() => { a.beep('work', F); a.speak('運動開始', { force: true, delayMs: 650 }); }, 1500);
@@ -130,7 +131,11 @@ export function renderSettings(root) {
     setTimeout(() => {
       flowTestBusy = false;
       const state = a.ctx ? a.ctx.state : 'なし';
-      flowTestMsg.textContent = `テスト終了。①〜⑤のうち聞こえなかった番号があれば、その番号と、次のかっこの中の文字を開発者に伝えてください。（音の状態：${state}）`;
+      const sp = a.lastSpeech;
+      let n = -1;
+      try { n = speechSynthesis.getVoices().filter((v) => /^ja/i.test(v.lang)).length; } catch { /* 非対応 */ }
+      const voice = sp ? `${sp.voice}／開始${sp.started ? '○' : '×'}／終了${sp.ended ? '○' : '×'}／エラー${sp.error || 'なし'}` : '読み上げ非対応';
+      flowTestMsg.textContent = `テスト終了。①〜⑤のうち聞こえなかった番号があれば、その番号と、次のかっこの中の文字を開発者に伝えてください。（音の状態：${state}／声：${voice}／日本語の声${n}個）`;
     }, 11000);
   }
 
