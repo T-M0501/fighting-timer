@@ -231,6 +231,7 @@ export class AudioEngine {
     } catch { /* ignore */ }
     // 取り消しの直後に話し始めると、iPhoneでは声が出ないことがあるので少し待つ
     const wait = Math.max(delayMs, busy ? 80 : 0);
+    this._keepAlive(true); // 話し始める前から音の出口を開けておく（声の出だしが小さくなったり欠けたりしないように）
     if (wait > 0) this.speakTimer = setTimeout(() => this._speakNow(text, st), wait);
     else this._speakNow(text, st);
   }
