@@ -1,8 +1,11 @@
 // Service Worker: アプリ本体をキャッシュしてオフラインで起動できるようにする。
 // VERSION は tools/stamp-version.mjs が自動更新します（手で編集しないでください）。
-const VERSION = '2026.1119-70576f89';
+const VERSION = '2026.1119-9a5d66fc';
 const CACHE = 'fighting-timer-' + VERSION;
+// 標準の声（音楽と一緒に使うモード用）
+const VOICE = ['start', 'rest', 'half', 'ten', 'finish', 'next', ...Array.from({ length: 15 }, (_, i) => 'n' + String(i + 1).padStart(2, '0'))].map((k) => './voice/' + k + '.wav');
 const ASSETS = [
+  ...VOICE,
   './',
   './index.html',
   './styles.css',

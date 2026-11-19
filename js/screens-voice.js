@@ -110,7 +110,7 @@ export function renderVoiceRec(root) {
     const sec = r ? (r.pcm.byteLength / 2 / r.rate).toFixed(1) : '';
     const note = recording ? '録音中… 話したら ■ を押します'
       : r ? `録音済み（${sec}秒）`
-        : '未録音' + (def.hint ? `　${def.hint}` : '');
+        : '未録音（標準の声）' + (def.hint ? `　${def.hint}` : '');
     return h('li', { class: 'card vrow' },
       h('div', { class: 'menu-main' }, h('div', { class: 'menu-name' }, def.label), h('div', { class: 'meta' }, note)),
       h('div', { class: 'vbtns' },
@@ -129,7 +129,7 @@ export function renderVoiceRec(root) {
     box.replaceChildren();
     mount(box,
       h('section', { class: 'card' },
-        h('p', null, 'あなたの声を録音して、音声ガイドにできます。録音した声は、音楽アプリを止めずに鳴らせます。'),
+        h('p', null, 'あなたの声を録音して、音声ガイドにできます。録音していない言葉は、標準の声（VOICEVOX:ずんだもん）が鳴ります。'),
         h('ul', { class: 'meta vhelp' },
           h('li', null, '静かな場所で、マイクに近づいて、はっきり話してください。'),
           h('li', null, '「● 録音」を押して話し、終わったら「■ 停止」を押します（5秒で自動的に止まります）。'),
@@ -143,7 +143,7 @@ export function renderVoiceRec(root) {
       h('ul', { class: 'list' }, phrases.map(rowFor)),
       h('h2', { class: 'sec' }, '種目名（最初から入っている種目）'),
       h('ul', { class: 'list' }, names.map(rowFor)),
-      h('p', { class: 'meta pad' }, '録音していない言葉は、読み上げません。自分で付けた種目名も読み上げません。1つも録音していないときは、これまでどおり端末の読み上げになります（iPhoneでは音楽が止まります）。'));
+      h('p', { class: 'meta pad' }, '録音していない言葉は、標準の声（VOICEVOX:ずんだもん）が鳴ります。自分で付けた種目名は、ここでは録音できないため、読み上げません。「音楽アプリと一緒に使う」がオフのときは、これまでどおり端末の読み上げです。'));
   }
 
   app.cleanup = () => {

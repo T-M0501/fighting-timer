@@ -15,7 +15,10 @@ const PEAK = 0.8;
 // ---- 録音の声（「音楽アプリと一緒に使う」がオンのとき用） ----
 // iPhoneは、読み上げ機能(SpeechSynthesis)が話し始めると音楽を止めてしまう。
 // そこで、決まった言葉と、最初から入っている種目名だけは、録音した声を電子音と同じ仕組みで鳴らす。
-// 録音は、利用者がアプリ内（screens-voice.js）で自分の声を録音したもの。端末のIndexedDBに保存される。
+// 声は2種類。どちらも電子音と同じ仕組み(Web Audio)で鳴らす:
+//  - 標準の声: アプリに入れてある voice/*.wav（VOICEVOX:ずんだもん）。作り方は tools/make-voice.mjs。
+//  - 自分の声: 利用者がアプリ内（screens-voice.js）で録音したもの。端末のIndexedDBに保存され、標準の声より優先される。
+const CLIP_DIR = './voice/';
 const clipNameKey = (name) => {
   const i = DEFAULT_EXERCISE_NAMES.indexOf(name);
   return i < 0 ? null : 'n' + String(i + 1).padStart(2, '0');
@@ -169,20 +172,34 @@ export class AudioEngine {
   loadClips() {
     if (this.clipsPromise) return this.clipsPromise;
     this.clipsState = 'loading';
+    const token = (this.clipsToken = (this.clipsToken || 0) + 1);
     this.clipsPromise = (async () => {
+      const clips = new Map();
+      // 標準の声（アプリに入っているファイル。なくてもアプリは動く）
+      await Promise.all(CLIP_KEYS.map(async (k) => {
+        try {
+          const r = await fetch(CLIP_DIR + k + '.wav');
+          if (!r.ok) throw new Error(String(r.status));
+          clips.set(k, await this.ctx.decodeAudioData(await r.arrayBuffer()));
+        } catch { /* ignore */ }
+      }));
+      // 自分の声（あれば標準の声より優先）
       let rows = [];
       try { rows = (await this.loadVoices()) || []; } catch { /* ignore */ }
       for (const r of rows) {
         if (!CLIP_KEYS.includes(r.key)) continue;
-        try { this.clips.set(r.key, this._bufferFrom(r)); } catch { /* ignore */ }
+        try { clips.set(r.key, this._bufferFrom(r)); } catch { /* ignore */ }
       }
-      this.clipsState = this.clips.size > 0 ? 'ready' : 'failed';
+      if (token !== this.clipsToken) return; // 読み込み中に録音が変わったら、新しい読み込みに任せる
+      this.clips = clips;
+      this.clipsState = clips.size > 0 ? 'ready' : 'failed';
     })();
     return this.clipsPromise;
   }
 
   /** 録音を録り直した・消したあとに、読み込み直す */
   reloadClips() {
+    this.clipsToken = (this.clipsToken || 0) + 1; // 読み込み中のものがあれば、その結果は捨てる
     this.clips = new Map();
     this.clipsPromise = null;
     this.clipsState = 'idle';

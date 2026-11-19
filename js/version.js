@@ -1,2 +1,2 @@
 // このファイルは tools/stamp-version.mjs が自動で書き換えます（手で編集しないでください）
-export const APP_VERSION = '2026.1119-70576f89';
+export const APP_VERSION = '2026.1119-9a5d66fc';
