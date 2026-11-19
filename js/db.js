@@ -1,7 +1,7 @@
 // IndexedDB 保存層。バージョン管理付き。使えない環境ではメモリ保存に切り替える。
 
 const DB_NAME = 'fighting-timer';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 export const STORES = ['menus', 'exercises', 'history', 'meta'];
 
 function reqP(req) {
@@ -49,6 +49,21 @@ class IdbStore {
     tx.objectStore(store).clear();
     await txDone(tx);
   }
+  // 自分の声の録音（バックアップの対象外。復元しても消えない）
+  async voiceAll() {
+    const tx = this.db.transaction('voice', 'readonly');
+    return reqP(tx.objectStore('voice').getAll());
+  }
+  async voicePut(v) {
+    const tx = this.db.transaction('voice', 'readwrite');
+    tx.objectStore('voice').put(v);
+    await txDone(tx);
+  }
+  async voiceDel(key) {
+    const tx = this.db.transaction('voice', 'readwrite');
+    tx.objectStore('voice').delete(key);
+    await txDone(tx);
+  }
   /** すべてを1つのトランザクションで置き換える。途中で失敗したら元のデータは変わらない */
   async replaceAll(data) {
     const tx = this.db.transaction(STORES, 'readwrite');
@@ -73,7 +88,11 @@ class MemoryStore {
   constructor() {
     this.persistent = false;
     this.data = { menus: new Map(), exercises: new Map(), history: new Map(), meta: new Map() };
+    this.voice = new Map();
   }
+  async voiceAll() { return [...this.voice.values()].map((v) => structuredClone(v)); }
+  async voicePut(v) { this.voice.set(v.key, structuredClone(v)); }
+  async voiceDel(key) { this.voice.delete(key); }
   keyOf(store, v) {
     return store === 'meta' ? v.key : v.id;
   }
@@ -110,6 +129,7 @@ export async function openStore() {
           d.createObjectStore('history', { keyPath: 'id' });
           d.createObjectStore('meta', { keyPath: 'key' });
         }
+        if (ev.oldVersion < 2) d.createObjectStore('voice', { keyPath: 'key' });
       };
       req.onsuccess = () => resolve(req.result);
       req.onerror = () => reject(req.error);

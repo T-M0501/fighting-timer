@@ -5,6 +5,7 @@ import { renderHome, renderMenus, renderHistory, renderExercises, renderImport }
 import { renderEditor } from './screens-edit.js';
 import { renderTimer } from './screens-timer.js';
 import { renderSettings, renderVoiceTest } from './screens-settings.js';
+import { renderVoiceRec } from './screens-voice.js';
 import { pageHeader } from './ui.js';
 
 const root = document.getElementById('app');
@@ -33,6 +34,7 @@ function render(hash) {
     else if (a === 'import') renderImport(view, b);
     else if (a === 'history') renderHistory(view);
     else if (a === 'settings') renderSettings(view);
+    else if (a === 'voice') renderVoiceRec(view);
     else if (a === 'voicetest') renderVoiceTest(view);
     else if (a === 'exercises') renderExercises(view);
     else renderHome(view);

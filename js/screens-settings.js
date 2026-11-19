@@ -172,16 +172,18 @@ export function renderSettings(root) {
     a.primeSpeech();
     flowTestMsg.textContent = 'テスト中… ①開始の音 →②「運動開始」の声 →③カウントダウン3回 →④休憩の音 →⑤「休憩開始」の声 の順に鳴ります。';
     const F = { force: true };
-    setTimeout(() => { a.beep('work', F); a.speak('運動開始', { force: true, delayMs: 650 }); }, 1500);
+    setTimeout(() => { a.beep('work', F); a.cue('work', { force: true, delayMs: 650 }); }, 1500);
     for (const t of [5000, 6000, 7000]) setTimeout(() => a.beep('count', F), t);
-    setTimeout(() => { a.beep('rest', F); a.speak('休憩開始', { force: true, delayMs: 650 }); }, 8000);
+    setTimeout(() => { a.beep('rest', F); a.cue('rest', { force: true, delayMs: 650 }); }, 8000);
     setTimeout(() => {
       flowTestBusy = false;
       const state = a.ctx ? a.ctx.state : 'なし';
       const sp = a.lastSpeech;
       let n = -1;
       try { n = speechSynthesis.getVoices().filter((v) => /^ja/i.test(v.lang)).length; } catch { /* 非対応 */ }
-      const voice = sp ? `${sp.voice}／開始${sp.started ? '○' : '×'}／終了${sp.ended ? '○' : '×'}／エラー${sp.error || 'なし'}` : '読み上げ非対応';
+      const mix = app.state.settings.mixMusic ? `録音の声：${a.clipsState}（${a.clips.size}個）` : '';
+      const spoken = sp ? `${sp.voice}／開始${sp.started ? '○' : '×'}／終了${sp.ended ? '○' : '×'}／エラー${sp.error || 'なし'}` : (mix ? '' : '読み上げ非対応');
+      const voice = [mix, spoken].filter(Boolean).join('／');
       flowTestMsg.textContent = `テスト終了。①〜⑤のうち聞こえなかった番号があれば、その番号と、次のかっこの中の文字を開発者に伝えてください。（音の状態：${state}／声：${voice}／日本語の声${n}個）`;
     }, 11000);
   }
@@ -243,7 +245,8 @@ export function renderSettings(root) {
       toggleRow('電子音', '運動・休憩の切り替え音、カウントダウン音、終了メロディー', st.beepOn, async (v) => { await saveSettings({ beepOn: v }); updateCdHint(); }),
       toggleRow('音声ガイド（日本語）', '運動開始・休憩開始・次の種目名・終了', st.voiceOn, (v) => saveSettings({ voiceOn: v })),
       toggleRow('残り時間の読み上げ', '運動が1分以上のとき「残り半分」、30秒以上のとき「残り10秒」と読み上げます（音声ガイドがオンのとき）', st.voiceProgress, (v) => saveSettings({ voiceProgress: v })),
-      toggleRow('音楽アプリと一緒に使う', 'オンにすると、音楽アプリで流している曲を止めずに、このアプリの音も鳴らします。ただし、消音モード（マナーモード）のときは、このアプリの音も鳴りません（iPhone）', st.mixMusic, (v) => { saveSettings({ mixMusic: v }); app.audio.unlock(); }),
+      toggleRow('音楽アプリと一緒に使う', 'オンにすると、音楽アプリの曲を止めずに、このアプリの音も鳴らします。音声ガイドは、あなたが録音した声になります（下の「自分の声を録音する」で録音します）。録音していない言葉は読み上げません。消音モード（マナーモード）のときは、このアプリの音も鳴りません（iPhone）', st.mixMusic, (v) => { saveSettings({ mixMusic: v }); app.audio.unlock(); }),
+      h('button', { class: 'btn btn-block', onClick: () => app.go('#/voice') }, '自分の声を録音する'),
       h('div', { class: 'fld-label' }, '音声ガイドの声'),
       voiceSeg,
       voiceHint,
@@ -256,7 +259,7 @@ export function renderSettings(root) {
       h('div', { class: 'row-actions wrap' },
         h('button', { class: 'btn', onClick: () => { app.audio.unlock(); app.audio.beep('work', { force: true }); } }, '電子音（開始）'),
         h('button', { class: 'btn', onClick: () => { app.audio.unlock(); app.audio.beep('count', { force: true }); } }, 'カウントダウン'),
-        h('button', { class: 'btn', onClick: () => { app.audio.unlock(); app.audio.speak('運動開始。次はスクワット', { force: true }); } }, '音声ガイド'),
+        h('button', { class: 'btn', onClick: () => { app.audio.unlock(); app.audio.cue('work', { name: 'スクワット', first: true, force: true }); } }, '音声ガイド'),
         h('button', { class: 'btn', onClick: () => { app.audio.unlock(); app.audio.beep('finish', { force: true }); } }, '終了メロディー')),
       h('button', { class: 'btn btn-block', onClick: flowTest }, 'タイマーと同じ流れで試す（約10秒）'),
       flowTestMsg,

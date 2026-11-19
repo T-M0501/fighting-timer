@@ -241,3 +241,10 @@ textarea.text { width: 100%; min-height: 96px; resize: vertical; font: inherit; 
 .stat-label { font-size: 12px; color: var(--muted); }
 .stat-count { font-size: 18px; font-weight: 800; }
 .stat-time { font-size: 12px; color: var(--muted); }
+
+/* 自分の声を録音する画面 */
+.vrow { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.vbtns { display: flex; gap: 6px; flex: none; }
+.vbtns .btn { min-height: 44px; padding: 4px 10px; }
+.vhelp { margin: 6px 0; padding-left: 20px; }
+.vsum { font-weight: 700; margin-top: 4px; }

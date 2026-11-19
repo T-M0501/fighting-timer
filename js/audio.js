@@ -8,16 +8,102 @@
 //  - 立ち上がり6ms・立ち下がり30msのエンベロープでクリックノイズを防止。
 //  - 音声ガイドは音量1.0固定で、電子音量スライダーとは独立（電子音を下げても声は聞こえる）。
 
+import { DEFAULT_EXERCISE_NAMES } from './model.js';
+
 const PEAK = 0.8;
 
+// ---- 録音の声（「音楽アプリと一緒に使う」がオンのとき用） ----
+// iPhoneは、読み上げ機能(SpeechSynthesis)が話し始めると音楽を止めてしまう。
+// そこで、決まった言葉と、最初から入っている種目名だけは、録音した声を電子音と同じ仕組みで鳴らす。
+// 録音は、利用者がアプリ内（screens-voice.js）で自分の声を録音したもの。端末のIndexedDBに保存される。
+const clipNameKey = (name) => {
+  const i = DEFAULT_EXERCISE_NAMES.indexOf(name);
+  return i < 0 ? null : 'n' + String(i + 1).padStart(2, '0');
+};
+/** 録音する言葉の一覧。group: phrase=決まった言葉 / name=最初から入っている種目名 */
+export const CLIP_DEFS = [
+  { key: 'start', label: '運動開始', group: 'phrase' },
+  { key: 'rest', label: '休憩開始', group: 'phrase' },
+  { key: 'half', label: '残り半分', group: 'phrase' },
+  { key: 'ten', label: '残り10秒', group: 'phrase' },
+  { key: 'finish', label: 'トレーニング終了です', group: 'phrase' },
+  { key: 'next', label: '次は', group: 'phrase', hint: '「次は、スクワット」の「次は」だけを言います' },
+  ...DEFAULT_EXERCISE_NAMES.map((name, i) => ({ key: 'n' + String(i + 1).padStart(2, '0'), label: name, group: 'name' })),
+];
+
+/**
+ * 録音した声を整える: 前後の無音を削り、音量をそろえる。声が小さすぎる・短すぎるときは null。
+ * samples: Float32Array(-1〜1) / rate: サンプルレート
+ */
+export function processVoice(samples, rate) {
+  let peak = 0;
+  for (let i = 0; i < samples.length; i++) {
+    const a = Math.abs(samples[i]);
+    if (a > peak) peak = a;
+  }
+  if (peak < 0.02) return null;
+  const th = peak * 0.06;
+  let a = 0;
+  let b = samples.length - 1;
+  while (a < b && Math.abs(samples[a]) < th) a++;
+  while (b > a && Math.abs(samples[b]) < th) b--;
+  a = Math.max(0, a - Math.round(rate * 0.06));
+  b = Math.min(samples.length - 1, b + Math.round(rate * 0.08));
+  const n = b - a + 1;
+  if (n < rate * 0.15) return null;
+  const gain = 0.95 / peak;
+  const fade = Math.max(1, Math.round(rate * 0.01));
+  const pcm = new Int16Array(n);
+  for (let i = 0; i < n; i++) {
+    const f = Math.min(1, i / fade, (n - 1 - i) / fade);
+    const v = Math.max(-1, Math.min(1, samples[a + i] * gain * f));
+    pcm[i] = Math.round(v * 32767);
+  }
+  return { pcm, rate, sec: n / rate };
+}
+
+export const CLIP_KEYS = ['start', 'rest', 'half', 'ten', 'finish', 'next', ...DEFAULT_EXERCISE_NAMES.map((_, i) => 'n' + String(i + 1).padStart(2, '0'))];
+
+/** 場面ごとに読み上げる文章（端末の読み上げ用） */
+export function cueText(kind, name = '', first = false) {
+  switch (kind) {
+    case 'work': return first && name ? `${name}、運動開始` : '運動開始';
+    case 'rest': return name ? `休憩開始。次は${name}` : '休憩開始';
+    case 'prep': return name ? `次は${name}` : '';
+    case 'half': return '残り半分';
+    case 'ten': return '残り10秒';
+    case 'finish': return 'トレーニング終了です';
+    default: return '';
+  }
+}
+
+/** 場面ごとに鳴らす録音の順番。種目名の録音がない(自分で付けた名前)ときは、その部分を省く */
+export function cueClips(kind, name = '', first = false) {
+  const n = clipNameKey(name);
+  switch (kind) {
+    case 'work': return first && n ? [n, 'start'] : ['start'];
+    case 'rest': return n ? ['rest', 'next', n] : ['rest'];
+    case 'prep': return n ? ['next', n] : [];
+    case 'half': return ['half'];
+    case 'ten': return ['ten'];
+    case 'finish': return ['finish'];
+    default: return [];
+  }
+}
+
 export class AudioEngine {
-  constructor(getSettings) {
+  constructor(getSettings, loadVoices = async () => []) {
     this.getSettings = getSettings;
+    this.loadVoices = loadVoices;
     this.ctx = null;
     this.master = null;
     this.lastBeepAt = 0;
     this.voice = null;
     this.speakTimer = null;
+    this.clips = new Map(); // 録音の声（デコード済み）
+    this.clipsState = 'idle'; // idle | loading | ready | failed
+    this.clipsPromise = null;
+    this.clipSrc = []; // 再生中の録音
     this.utter = null; // 読み上げ中の発話を保持（途中で破棄されて止まるのを防ぐ）
   }
 
@@ -53,6 +139,8 @@ export class AudioEngine {
           shaper.connect(this.master);
           this.master.connect(this.ctx.destination);
           this.input = comp;
+          this.voiceGain = this.ctx.createGain(); // 録音の声は電子音量の影響を受けず、そのままの大きさで出す
+          this.voiceGain.connect(this.ctx.destination);
           // iPhoneでは読み上げや着信などで音が止められる(interrupted)ことがある。止められたら自分で再開する。
           // ただし読み上げの最中は再開しない（声を途中で止めてしまうおそれがあるため。読み上げが終われば再開する）
           this.ctx.addEventListener('statechange', () => { if (!this.utter) this._wake(); });
@@ -63,9 +151,57 @@ export class AudioEngine {
     } catch (e) {
       console.warn('AudioContext初期化失敗', e);
     }
+    if (this.ctx && this.getSettings().mixMusic) this.loadClips();
     // 声の一覧を先に読み込んでおく。ここでは無音の読み上げをしない:
     // 直後の本物の読み上げがそれを取り消す形になり、iPhoneで声が出なくなることがあるため。
     try { globalThis.speechSynthesis?.getVoices(); } catch { /* ignore */ }
+  }
+
+  _bufferFrom(rec) {
+    const pcm = new Int16Array(rec.pcm);
+    const b = this.ctx.createBuffer(1, pcm.length, rec.rate);
+    const f = b.getChannelData(0);
+    for (let i = 0; i < pcm.length; i++) f[i] = pcm[i] / 32768;
+    return b;
+  }
+
+  /** 録音の声を読み込む（一度だけ）。1つもなければ 'failed' にして、端末の読み上げに切り替える */
+  loadClips() {
+    if (this.clipsPromise) return this.clipsPromise;
+    this.clipsState = 'loading';
+    this.clipsPromise = (async () => {
+      let rows = [];
+      try { rows = (await this.loadVoices()) || []; } catch { /* ignore */ }
+      for (const r of rows) {
+        if (!CLIP_KEYS.includes(r.key)) continue;
+        try { this.clips.set(r.key, this._bufferFrom(r)); } catch { /* ignore */ }
+      }
+      this.clipsState = this.clips.size > 0 ? 'ready' : 'failed';
+    })();
+    return this.clipsPromise;
+  }
+
+  /** 録音を録り直した・消したあとに、読み込み直す */
+  reloadClips() {
+    this.clips = new Map();
+    this.clipsPromise = null;
+    this.clipsState = 'idle';
+    if (this.ctx && this.getSettings().mixMusic) this.loadClips();
+  }
+
+  /** 録音した声を1つ再生して確かめる（録音画面用） */
+  previewRecording(rec) {
+    this.unlock();
+    if (!this.ctx) return;
+    try {
+      this._stopClips();
+      const src = this.ctx.createBufferSource();
+      src.buffer = this._bufferFrom(rec);
+      src.connect(this.voiceGain);
+      src.onended = () => { this.clipSrc = this.clipSrc.filter((x) => x !== src); try { src.disconnect(); } catch { /* ignore */ } };
+      this.clipSrc.push(src);
+      src.start();
+    } catch (e) { console.warn('録音の再生に失敗', e); }
   }
 
   /** 電子音の出口が止められていたら再開する */
@@ -262,7 +398,53 @@ export class AudioEngine {
     }
   }
 
+  /**
+   * 場面に合わせて声を出す。
+   * 「音楽アプリと一緒に使う」オンのときは録音の声（音楽を止めない）、そうでなければ端末の読み上げ。
+   * kind: work | rest | prep | half | ten | finish
+   */
+  cue(kind, { name = '', first = false, force = false, delayMs = 0 } = {}) {
+    const st = this.getSettings();
+    if (!force && !st.voiceOn) return;
+    const text = cueText(kind, name, first);
+    if (st.mixMusic && this.clipsState !== 'failed') {
+      this._playClips(cueClips(kind, name, first), text, delayMs, force);
+      return;
+    }
+    if (text) this.speak(text, { force, delayMs });
+  }
+
+  async _playClips(keys, text, delayMs, force) {
+    if (!keys.length) return;
+    if (!this.ctx) this.unlock();
+    if (!this.ctx) { if (text) this.speak(text, { force, delayMs }); return; }
+    const asked = performance.now();
+    try { await this.loadClips(); } catch { /* ignore */ }
+    if (this.clipsState !== 'ready') { if (text) this.speak(text, { force, delayMs }); return; }
+    try { if (this.ctx.state !== 'running') await this.ctx.resume(); } catch { /* ignore */ }
+    if (this.ctx.state !== 'running' || performance.now() - asked > 2500) return; // ずれて鳴るくらいなら鳴らさない
+    this._stopClips();
+    let t = this.ctx.currentTime + Math.max(0, delayMs - (performance.now() - asked)) / 1000 + 0.02;
+    for (const k of keys) {
+      const b = this.clips.get(k);
+      if (!b) continue;
+      const src = this.ctx.createBufferSource();
+      src.buffer = b;
+      src.connect(this.voiceGain);
+      src.start(t);
+      src.onended = () => { this.clipSrc = this.clipSrc.filter((x) => x !== src); try { src.disconnect(); } catch { /* ignore */ } };
+      this.clipSrc.push(src);
+      t += b.duration + 0.06;
+    }
+  }
+
+  _stopClips() {
+    for (const s of this.clipSrc) { try { s.stop(); } catch { /* ignore */ } }
+    this.clipSrc = [];
+  }
+
   cancelSpeech() {
+    this._stopClips();
     clearTimeout(this.speakTimer);
     this.utter = null;
     this._keepAlive(false);

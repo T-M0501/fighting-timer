@@ -24,7 +24,7 @@ export const app = {
   persistent: true,
 };
 
-app.audio = new AudioEngine(() => app.state.settings);
+app.audio = new AudioEngine(() => app.state.settings, () => app.store.voiceAll());
 
 const byOrder = (a, b) => a.order - b.order;
 
