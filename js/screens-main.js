@@ -82,6 +82,8 @@ export function renderHome(root) {
       h('button', { class: 'btn nav-btn', onClick: () => app.go('#/menus') }, h('span', { class: 'nav-ico' }, '📋'), 'メニュー一覧'),
       h('button', { class: 'btn nav-btn', onClick: () => app.go('#/history') }, h('span', { class: 'nav-ico' }, '🕘'), '履歴'),
       h('button', { class: 'btn nav-btn', onClick: () => app.go('#/settings') }, h('span', { class: 'nav-ico' }, '⚙️'), '設定')),
+    // クレジット表記（利用条件）。画面の一番下に固定して、メニューが増えても常に見えるようにする
+    h('footer', { class: 'home-credit' }, '音声：VOICEVOX:ずんだもん'),
   );
 }
 
