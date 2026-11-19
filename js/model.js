@@ -126,7 +126,7 @@ export function sanitizeHistory(raw) {
 }
 
 export function defaultSettings() {
-  return { beepOn: true, voiceOn: true, volume: 80, countdown: 3, notify: false, keepAwake: true, menuView: 'simple', theme: 'kickboxing', voiceGender: 'female', voiceProgress: true, historyStats: true };
+  return { beepOn: true, voiceOn: true, volume: 80, countdown: 3, notify: false, keepAwake: true, menuView: 'simple', theme: 'kickboxing', voiceGender: 'female', voiceProgress: true, historyStats: true, mixMusic: false };
 }
 
 export function sanitizeSettings(raw) {
@@ -145,6 +145,7 @@ export function sanitizeSettings(raw) {
     voiceGender: raw.voiceGender === 'male' ? 'male' : 'female',
     voiceProgress: typeof raw.voiceProgress === 'boolean' ? raw.voiceProgress : d.voiceProgress,
     historyStats: typeof raw.historyStats === 'boolean' ? raw.historyStats : d.historyStats,
+    mixMusic: typeof raw.mixMusic === 'boolean' ? raw.mixMusic : d.mixMusic,
   };
 }
 

@@ -24,7 +24,8 @@ export class AudioEngine {
   /** ユーザーの操作(タップ)の中で必ず呼ぶ。iOSでは操作内でないと音が出ない */
   unlock() {
     try {
-      if (navigator.audioSession) navigator.audioSession.type = 'playback'; // iOS: サイレントスイッチの影響を受けにくくする
+      // iOS: 'playback' は消音モードでも鳴るが、音楽アプリは止まる。'ambient' は音楽アプリと一緒に鳴らせるが、消音モードでは鳴らない。
+      if (navigator.audioSession) navigator.audioSession.type = this.getSettings().mixMusic ? 'ambient' : 'playback';
     } catch { /* 非対応 */ }
     try {
       if (!this.ctx) {

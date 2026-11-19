@@ -243,6 +243,7 @@ export function renderSettings(root) {
       toggleRow('電子音', '運動・休憩の切り替え音、カウントダウン音、終了メロディー', st.beepOn, async (v) => { await saveSettings({ beepOn: v }); updateCdHint(); }),
       toggleRow('音声ガイド（日本語）', '運動開始・休憩開始・次の種目名・終了', st.voiceOn, (v) => saveSettings({ voiceOn: v })),
       toggleRow('残り時間の読み上げ', '運動が1分以上のとき「残り半分」、30秒以上のとき「残り10秒」と読み上げます（音声ガイドがオンのとき）', st.voiceProgress, (v) => saveSettings({ voiceProgress: v })),
+      toggleRow('音楽アプリと一緒に使う', 'オンにすると、音楽アプリで流している曲を止めずに、このアプリの音も鳴らします。ただし、消音モード（マナーモード）のときは、このアプリの音も鳴りません（iPhone）', st.mixMusic, (v) => { saveSettings({ mixMusic: v }); app.audio.unlock(); }),
       h('div', { class: 'fld-label' }, '音声ガイドの声'),
       voiceSeg,
       voiceHint,
